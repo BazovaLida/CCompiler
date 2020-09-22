@@ -6,35 +6,49 @@ import java.util.Scanner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+enum Identity{INT_KEYWORD, IDENTIFIER, OPEN_PARENTHESES, CLOSE_PARENTHESES, OPEN_BRACE, RETURN_KEYWORD,
+    INT_CONSTANT, CLOSE_BRACE, UNKNOWN}
+
 public class Lexing {
     public Lexing(File input) throws FileNotFoundException {
         Scanner scanner = new Scanner(input);
-//        ArrayList<String> rows = new ArrayList<>();
-        ArrayList<TokenList<String>> tokens = new ArrayList<>();
-        int counter = 0;
+        LinkedHashMap<String, Identity> tokens = new LinkedHashMap<>();
+        String currentToken;
 
-        String currentRow;
-        String currentWord;
-//        ArrayList<Matcher> match = new ArrayList<>();
-
-        //ending of rows (with ";" or without it) and comments
-        scanner.useDelimiter(";\\s+|/{2,}([\\s\\S]+?)\\n+\\s*");
-        Pattern pattern = Pattern.compile("([a-zA-Z_][a-zA-Z_0-9]*)|\\S");
-        Matcher matcher;
+        //word or any other symbol
+        Pattern pattern = Pattern.compile("([a-zA-Z_][a-zA-Z_0-9]*)|\\S|\\s");
 
         //splitting text by rows removing comments and ;
-        while (scanner.hasNext()) {
-            currentRow = scanner.next();
-//            rows.add(currentRow);
-            tokens.add(new TokenList<>());
-            System.out.println(currentRow);
+        while (scanner.hasNext(pattern)) {
+//            currentToken = scanner.next(pattern);
+            currentToken = 
+            tokens.put(currentToken, setTokenIdentity(currentToken));
 
-            matcher = pattern.matcher(currentRow);
-            while (matcher.find()) {
-                currentWord = currentRow.substring(matcher.start(), matcher.end());
-                tokens.get(counter).add(currentWord);
-            }
-            counter ++;
+            System.out.println(currentToken);
+        }
+    }
+
+    private Identity setTokenIdentity(String next) {
+        Matcher matcher;
+        if(Pattern.matches("int", (CharSequence) next)){
+            return Identity.INT_KEYWORD;
+        } else if (Pattern.matches("[a-zA-Z_][a-zA-Z_0-9]*", (CharSequence) next)){
+            return Identity.IDENTIFIER;
+        } else if (Pattern.matches("\\(", (CharSequence) next)){
+            return Identity.OPEN_PARENTHESES;
+        } else if (Pattern.matches("\\)", (CharSequence) next)){
+            return Identity.CLOSE_PARENTHESES;
+        } else if (Pattern.matches("\\{", (CharSequence) next)){
+            return Identity.OPEN_BRACE;
+        } else if (Pattern.matches("return", (CharSequence) next)){
+            return Identity.RETURN_KEYWORD;
+        } else if (Pattern.matches("[0-9]+", (CharSequence) next)){
+            return Identity.INT_CONSTANT;
+        } else if (Pattern.matches("}", (CharSequence) next)){
+            return Identity.CLOSE_BRACE;
+        } else {
+            System.out.println("Current version of this compiler doesn't support token " + next);
+            return Identity.UNKNOWN;
         }
     }
 
