@@ -1,4 +1,4 @@
 #include<stdio>
-int     maiojin(int c){ // C language
+int main(){ // C language
     return 2;
 }

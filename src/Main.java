@@ -9,7 +9,7 @@ public class Main {
         if(error) return;
 
         boolean notError = compiler.startParsing();
-        if(notError) return;
+        if(!notError) return;
         System.out.println("Success!");
     }
 

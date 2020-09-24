@@ -77,7 +77,7 @@ public class Compiler {
             }
             return parsingError();
         }
-        return parseFunction();
+        return parseFunction(false);
     }
 
     private static boolean parsingError() {
@@ -85,10 +85,10 @@ public class Compiler {
         return false;
     }
 
-    private boolean parseFunction() {
-        boolean ok = true;
+    private boolean parseFunction(boolean mainIsOk) {
         boolean main = false;
         TokenT currT = tokens.getTypes().get(currIndex);
+        TokenT returnType = currT; //return type
         if (keywordsTypes.contains(currT)) {
             currT = tokens.getTypes().get(++currIndex);
             if (identifierTypes.contains(currT)) {
@@ -96,24 +96,38 @@ public class Compiler {
                 currT = tokens.getTypes().get(++currIndex);
                 if (currT.equals(TokenT.OPEN_PARENTHESES)) {
                     currIndex++;
-                    if (!main) ok = parseVariable(true);
+                    if (!main && parseVariable(true)) return parsingError();
                     currT = tokens.getTypes().get(currIndex);
-                    if(currT.equals(TokenT.CLOSE_PARENTHESES)){
+                    if (currT.equals(TokenT.CLOSE_PARENTHESES)) {
                         currT = tokens.getTypes().get(++currIndex);
                         if (currT.equals(TokenT.OPEN_BRACE)) {
-                            currIndex ++;
-                            return ok && parseFunctionBody();
-
+                            currIndex++;
+                            if(parseFunctionBody(returnType)){
+                                currT = tokens.getTypes().get(++currIndex);
+                                if (currT.equals(TokenT.CLOSE_BRACE)) {
+                                    return parseFunction(main);
+                                }
+                            }
                         }
                     }
                 }
             }
             return parsingError();
-        } return parsingError();
+        }
+        return mainIsOk;
     }
 
-    private boolean parseFunctionBody(){
-        return true;
+    private boolean parseFunctionBody(TokenT returnType) {
+        if( !parseVariable(false)) return parsingError();
+        TokenT currT = tokens.getTypes().get(currIndex);
+        if (currT.equals(TokenT.KEYWORD_RETURN)) {
+            currT = tokens.getTypes().get(++ currIndex);
+            if (currT.equals(TokenT.IDENTIFIER)) {//todo соответствие
+                return true;
+            }
+
+        }
+        return parsingError();
     }
 
     //insideFunc == "supposed to has value" - flag if we can set value to variable
@@ -143,20 +157,18 @@ public class Compiler {
             if (!lastEquals && currT.equals(TokenT.SEMICOLONS)) {
                 currIndex++;
                 return true;
-            }
-            else if (!lastEquals && currT.equals(TokenT.COMMA)) {
+            } else if (!lastEquals && currT.equals(TokenT.COMMA)) {
                 currIndex++;
                 return parseValue(varIndex, false, true);
-            }
-            else if (!lastComma && currT.equals(TokenT.EQUALS)) {
-                currIndex ++;
+            } else if (!lastComma && currT.equals(TokenT.EQUALS)) {
+                currIndex++;
                 return afterEquals(varIndex);
-
             }
         }
-        return false;
+        return parsingError();
     }
-    private boolean afterEquals(int varIndex){
+
+    private boolean afterEquals(int varIndex) {
         TokenT varT = tokens.getTypes().get(varIndex);
         TokenT currT = tokens.getTypes().get(currIndex);
         if (currT.equals(TokenT.INT_CONSTANT)) {
@@ -165,12 +177,10 @@ public class Compiler {
                 System.out.println("Parsed int value");
                 currIndex++;
                 return true;
-            }
-            else if (currT.equals(TokenT.COMMA) && varT.equals(TokenT.KEYWORD_INT)) {
+            } else if (currT.equals(TokenT.COMMA) && varT.equals(TokenT.KEYWORD_INT)) {
                 currIndex++;
                 return parseValue(varIndex, true, false);
-            }
-            else if (currT.equals(TokenT.DOT)) {
+            } else if (currT.equals(TokenT.DOT)) {
                 currT = tokens.getTypes().get(++currIndex);
                 if (currT.equals(TokenT.INT_CONSTANT)) {
                     currT = tokens.getTypes().get(++currIndex);
@@ -180,27 +190,25 @@ public class Compiler {
                             System.out.println("Parsed double value");
                             currIndex++;
                             return true;
-                        }
-                        else if (currT.equals(TokenT.COMMA)) {
+                        } else if (currT.equals(TokenT.COMMA)) {
                             currIndex++;
                             return parseValue(varIndex, true, false);
                         }
-                    }
-                    else if (currT.equals(TokenT.SEMICOLONS) && varT.equals(TokenT.KEYWORD_FLOAT)) {
+                    } else if (currT.equals(TokenT.SEMICOLONS) && varT.equals(TokenT.KEYWORD_FLOAT)) {
                         System.out.println("Parsed float value");
                         currIndex++;
                         return true;
-                    }
-                    else if (currT.equals(TokenT.COMMA) && varT.equals(TokenT.KEYWORD_FLOAT)) {
+                    } else if (currT.equals(TokenT.COMMA) && varT.equals(TokenT.KEYWORD_FLOAT)) {
                         currIndex++;
                         return parseValue(varIndex, true, false);
                     }
                 }
             }
-        } else if (numericTypes.contains(varT)){
+        } else if (numericTypes.contains(varT)) {
             System.out.println("Sorry, but current version of the program can parse only integer, double and float");
-            return false;
-        } return false;
+            return parsingError();
+        }
+        return parsingError();
     }
 }
 
@@ -228,7 +236,7 @@ enum TokenT {
     MULTIPLY("\\*"),
     DIVIDE("/"),
     HASH("#"),
-    DOT("."),
+    DOT("\\."),
     COMMA(","),
     SPACE_N("\\n"),
     SEMICOLONS(";"),
