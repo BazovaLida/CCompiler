@@ -4,7 +4,7 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class Compiler {
+public class  Compiler {
     private final Scanner scanner;
     private final Tokens tokens = new Tokens();
 
@@ -15,11 +15,10 @@ public class Compiler {
     public boolean startLexing() {
         boolean error;
         boolean comments = false;
-        String currNextLine;
-        String currNext;
+        boolean prev0 = false; //for binary numbers search
+        String currNextLine, currNext;
 
-        //ending of rows (with ";" or without it) and comments
-        Pattern pattern = Pattern.compile("[a-zA-Z_][a-zA-Z_0-9]*|\\S");
+        Pattern pattern = Pattern.compile("(b[01]+\\b)|[a-zA-Z_][a-zA-Z_0-9]*|\\S");
         Matcher matcher;
 
         System.out.println("List of lexems");
@@ -47,7 +46,6 @@ public class Compiler {
                     return true; //stop program because of error in input file
                 }
             }
-//            tokens.setPair("\n");
         }
         return false; //Lexing of program is successful
     }
@@ -203,6 +201,16 @@ public class Compiler {
                         return parseValue(varIndex, true, false);
                     }
                 }
+            } else if(currT.equals(TokenT.INT_BIN_CONSTANT) && varT.equals(TokenT.KEYWORD_INT)){
+                currT = tokens.getTypes().get(++currIndex);
+                if (currT.equals(TokenT.SEMICOLONS)) {
+                    System.out.println("Parsed binary int value");
+                    currIndex++;
+                    return true;
+                } else if (currT.equals(TokenT.COMMA)) {
+                    currIndex++;
+                    return parseValue(varIndex, true, false);
+                }
             }
         } else if (numericTypes.contains(varT)) {
             System.out.println("Sorry, but current version of the program can parse only integer, double and float");
@@ -220,6 +228,8 @@ enum TokenT {
     KEYWORD_CHAR("char"),
     KEYWORD_VOID("void"),
     KEYWORD_RETURN("return"),
+    INT_CONSTANT("[0-9]+"),
+    INT_BIN_CONSTANT("b[01]+\b"),
     IDENTIFIER_MAIN("main"),
     IDENTIFIER_D("d"),
     IDENTIFIER("[a-zA-Z_][a-zA-Z_0-9]*"),
@@ -229,7 +239,6 @@ enum TokenT {
     CLOSE_PARENTHESES("\\)"),
     CLOSE_INCLUDE(">"),
     CLOSE_BRACE("}"),
-    INT_CONSTANT("[0-9]+"),
     EQUALS("="),
     PLUS("\\+"),
     MINUS("-"),
@@ -274,12 +283,7 @@ class Tokens {
     public ArrayList<String> getTokens() {
         return tokens;
     }
-
     public ArrayList<TokenT> getTypes() {
         return types;
-    }
-
-    public int getMaxIndex() {
-        return index;
     }
 }
