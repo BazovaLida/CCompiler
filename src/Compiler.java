@@ -12,14 +12,16 @@ public class Compiler {
         scanner = new Scanner(input);
     }
 
+    //-------------------------------------------Lexing-----------------------------------------
     public boolean startLexing() {
         boolean error;
         boolean comments = false;
+        boolean prev0 = false; //for binary numbers search
         String currNextLine;
         String currNext;
 
         //ending of rows (with ";" or without it) and comments
-        Pattern pattern = Pattern.compile("[a-zA-Z_][a-zA-Z_0-9]*|\\S");
+        Pattern pattern = Pattern.compile("b[01]+\\b|[0-9]+|[a-zA-Z_][a-zA-Z_0-9]*|\\S");
         Matcher matcher;
 
         System.out.println("List of lexems");
@@ -31,7 +33,7 @@ public class Compiler {
             while (matcher.find()) {
                 currNext = currNextLine.substring(matcher.start(), matcher.end());
 
-                //comment lexing
+                //comments lexing
                 if (currNext.equals("/")) {
                     if (comments) {
                         comments = false;
@@ -47,37 +49,43 @@ public class Compiler {
                     return true; //stop program because of error in input file
                 }
             }
-//            tokens.setPair("\n");
         }
         return false; //Lexing of program is successful
     }
 
-    EnumSet<TokenT> keywordsTypes = EnumSet.range(TokenT.KEYWORD_INT, TokenT.KEYWORD_VOID);
-    EnumSet<TokenT> numericTypes = EnumSet.range(TokenT.KEYWORD_INT, TokenT.KEYWORD_DOUBLE);
-    EnumSet<TokenT> identifierTypes = EnumSet.range(TokenT.IDENTIFIER_MAIN, TokenT.IDENTIFIER);
-    private int currIndex = 0;
+    //-------------------------------------------Parsing-----------------------------------------
+
+    private int i = 0;//current index
+
+    private ParseAST parseAST = new ParseAST();
 
     public boolean startParsing() {
-        TokenT currT = tokens.getTypes().get(currIndex);
-        if (currT.equals(TokenT.HASH)) {
-            currT = tokens.getTypes().get(++currIndex);
-            if (currT.equals(TokenT.KEYWORD_INCLUDE)) {
-                currT = tokens.getTypes().get(++currIndex);
-                if (currT.equals(TokenT.OPEN_INCLUDE)) {
-                    currT = tokens.getTypes().get(++currIndex);
-                    if (currT.equals(TokenT.IDENTIFIER)) {
-                        currT = tokens.getTypes().get(++currIndex);
-                        if (currT.equals(TokenT.CLOSE_INCLUDE)) {
-                            System.out.println("\nParsed included library " + tokens.getTokens().get(currIndex - 1));
-                            currIndex++;
-                            return startParsing();
+        TokenT currT = tokens.getTypes().get(i);
+        TokenT returnType = currT; //return type
+        if (currT.equals(TokenT.KEYWORD_INT)) {
+            parseAST.setReturnType(returnType);
+            currT = tokens.getTypes().get(++i);
+            if (currT.equals(TokenT.IDENTIFIER)) {
+                parseAST.setFunctionName(tokens.getTokens().get(i));
+                currT = tokens.getTypes().get(++i);
+                if (currT.equals(TokenT.OPEN_PARENTHESES)) {
+                    currT = tokens.getTypes().get(++i);
+                    if (currT.equals(TokenT.CLOSE_PARENTHESES)) {
+                        currT = tokens.getTypes().get(++i);
+                        if (currT.equals(TokenT.OPEN_BRACE)) {
+                            i++;
+                            if (parseFunctionBody(returnType)) {
+                                currT = tokens.getTypes().get(i);
+                                if (currT.equals(TokenT.CLOSE_BRACE)) {
+                                    return true;
+                                }
+                            }
                         }
                     }
                 }
             }
-            return parsingError();
         }
-        return parseFunction(false);
+        return parsingError();
     }
 
     private static boolean parsingError() {
@@ -85,130 +93,77 @@ public class Compiler {
         return false;
     }
 
-    private boolean parseFunction(boolean mainIsOk) {
-        boolean main = false;
-        TokenT currT = tokens.getTypes().get(currIndex);
-        TokenT returnType = currT; //return type
-        if (keywordsTypes.contains(currT)) {
-            currT = tokens.getTypes().get(++currIndex);
-            if (identifierTypes.contains(currT)) {
-                if (currT.equals(TokenT.IDENTIFIER_MAIN)) main = true;
-                currT = tokens.getTypes().get(++currIndex);
-                if (currT.equals(TokenT.OPEN_PARENTHESES)) {
-                    currIndex++;
-                    if (!main && parseVariable(true)) return parsingError();
-                    currT = tokens.getTypes().get(currIndex);
-                    if (currT.equals(TokenT.CLOSE_PARENTHESES)) {
-                        currT = tokens.getTypes().get(++currIndex);
-                        if (currT.equals(TokenT.OPEN_BRACE)) {
-                            currIndex++;
-                            if(parseFunctionBody(returnType)){
-                                currT = tokens.getTypes().get(++currIndex);
-                                if (currT.equals(TokenT.CLOSE_BRACE)) {
-                                    return parseFunction(main);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            return parsingError();
-        }
-        return mainIsOk;
-    }
-
     private boolean parseFunctionBody(TokenT returnType) {
-        if( !parseVariable(false)) return parsingError();
-        TokenT currT = tokens.getTypes().get(currIndex);
+        TokenT currT = tokens.getTypes().get(i);
         if (currT.equals(TokenT.KEYWORD_RETURN)) {
-            currT = tokens.getTypes().get(++ currIndex);
-            if (currT.equals(TokenT.IDENTIFIER)) {//todo соответствие
-                return true;
-            }
+            currT = tokens.getTypes().get(++i);
 
-        }
-        return parsingError();
-    }
+            if (currT.equals(TokenT.INT_CONSTANT)) {
+                String prevToken = tokens.getTokens().get(i);
+                currT = tokens.getTypes().get(++i);
 
-    //insideFunc == "supposed to has value" - flag if we can set value to variable
-    private boolean parseVariable(boolean insideFunc) {
-        TokenT currT = tokens.getTypes().get(currIndex);
-        if (keywordsTypes.contains(currT)) {
-            if (insideFunc) {
-                currT = tokens.getTypes().get(++currIndex);
-                if (currT.equals(TokenT.IDENTIFIER)) {
-                    currT = tokens.getTypes().get(++currIndex);
-                    if (currT.equals(TokenT.COMMA)) {
-                        currIndex++;
-                        return parseVariable(insideFunc);
-                    } else if (currT.equals(TokenT.CLOSE_PARENTHESES)) return true;
-                }
-            }
-            currIndex++;
-            return parseValue(currIndex - 1, false, false);
-        }
-        return true;
-    }
-
-    private boolean parseValue(int varIndex, boolean lastEquals, boolean lastComma) {
-        TokenT currT = tokens.getTypes().get(currIndex);
-        if (currT.equals(TokenT.IDENTIFIER)) {
-            currT = tokens.getTypes().get(++currIndex);
-            if (!lastEquals && currT.equals(TokenT.SEMICOLONS)) {
-                currIndex++;
-                return true;
-            } else if (!lastEquals && currT.equals(TokenT.COMMA)) {
-                currIndex++;
-                return parseValue(varIndex, false, true);
-            } else if (!lastComma && currT.equals(TokenT.EQUALS)) {
-                currIndex++;
-                return afterEquals(varIndex);
-            }
-        }
-        return parsingError();
-    }
-
-    private boolean afterEquals(int varIndex) {
-        TokenT varT = tokens.getTypes().get(varIndex);
-        TokenT currT = tokens.getTypes().get(currIndex);
-        if (currT.equals(TokenT.INT_CONSTANT)) {
-            currT = tokens.getTypes().get(++currIndex);
-            if (currT.equals(TokenT.SEMICOLONS) && varT.equals(TokenT.KEYWORD_INT)) {
-                System.out.println("Parsed int value");
-                currIndex++;
-                return true;
-            } else if (currT.equals(TokenT.COMMA) && varT.equals(TokenT.KEYWORD_INT)) {
-                currIndex++;
-                return parseValue(varIndex, true, false);
-            } else if (currT.equals(TokenT.DOT)) {
-                currT = tokens.getTypes().get(++currIndex);
-                if (currT.equals(TokenT.INT_CONSTANT)) {
-                    currT = tokens.getTypes().get(++currIndex);
-                    if (currT.equals(TokenT.IDENTIFIER_D) && varT.equals(TokenT.KEYWORD_DOUBLE)) {
-                        currT = tokens.getTypes().get(++currIndex);
+                if (currT.equals(TokenT.SEMICOLONS)) {
+                    int decToken = Integer.parseInt(tokens.getTokens().get(i - 1));
+                    int binToken = Integer.parseInt(Integer.toBinaryString(decToken));
+                    parseAST.setReturnValue(binToken);
+                    System.out.println("Parsed int value: " + decToken);
+                    i++;
+                    return true;
+                } else if (currT.equals(TokenT.DOT)) {
+                    int decToken = Integer.parseInt(tokens.getTokens().get(i - 1));
+                    int binToken = Integer.parseInt(Integer.toBinaryString(decToken));
+                    parseAST.setReturnValue(binToken);
+                    currT = tokens.getTypes().get(++i);
+                    if (currT.equals(TokenT.INT_CONSTANT)) {
+                        currT = tokens.getTypes().get(++i);
                         if (currT.equals(TokenT.SEMICOLONS)) {
-                            System.out.println("Parsed double value");
-                            currIndex++;
+                            i ++;
+                            System.out.println("Parsed float -> int value: " + decToken);
                             return true;
-                        } else if (currT.equals(TokenT.COMMA)) {
-                            currIndex++;
-                            return parseValue(varIndex, true, false);
                         }
-                    } else if (currT.equals(TokenT.SEMICOLONS) && varT.equals(TokenT.KEYWORD_FLOAT)) {
-                        System.out.println("Parsed float value");
-                        currIndex++;
+                    }
+                } else if (prevToken.equals("0") && currT.equals(TokenT.INT_BIN_CONSTANT)){
+                    currT = tokens.getTypes().get(++i);
+                    if (currT.equals(TokenT.SEMICOLONS)) {
+                        String binToken = tokens.getTokens().get(i - 1);
+                        int value = Integer.parseInt(binToken.substring(1));
+                        parseAST.setReturnValue(value);
+                        System.out.println("Parsed binary int value: " + value);
+                        i++;
                         return true;
-                    } else if (currT.equals(TokenT.COMMA) && varT.equals(TokenT.KEYWORD_FLOAT)) {
-                        currIndex++;
-                        return parseValue(varIndex, true, false);
                     }
                 }
             }
-        } else if (numericTypes.contains(varT)) {
-            System.out.println("Sorry, but current version of the program can parse only integer, double and float");
-            return parsingError();
         }
         return parsingError();
+    }
+
+    //-----------------------------------------Generation---------------------------------------
+
+    public String generator(){
+        String functionName = parseAST.getFunctionName();
+//        TokenT returnType = parseAST.getReturnType();
+        int returnValue = parseAST.getReturnValue();
+        String lineSep = System.getProperty("line.separator");
+
+
+        String code = ".386" + lineSep +
+                ".model flat, stdcall" + lineSep +
+                "option casemap :none" + lineSep + lineSep +
+                "include C:\\masm32\\include\\kernel32.inc" + lineSep +
+                "includelib C:\\masm32\\lib\\kernel32.lib" + lineSep +
+                functionName + " PROTO" + lineSep + lineSep +
+                ".data" + lineSep + lineSep +
+                ".code" + lineSep + lineSep +
+                "start:" + lineSep + lineSep +
+                "invoke " + functionName + lineSep +
+                "invoke ExitProcess,0" + lineSep + lineSep +
+                functionName + " PROC" + lineSep +
+                "mov eax, " + returnValue + lineSep +
+                "ret" + lineSep +
+                functionName + " ENDP" + lineSep +
+                "END start" + lineSep;
+        return code;
     }
 }
 
@@ -220,8 +175,8 @@ enum TokenT {
     KEYWORD_CHAR("char"),
     KEYWORD_VOID("void"),
     KEYWORD_RETURN("return"),
-    IDENTIFIER_MAIN("main"),
-    IDENTIFIER_D("d"),
+    INT_CONSTANT("[0-9]+"),
+    INT_BIN_CONSTANT("b[01]+\\b"),
     IDENTIFIER("[a-zA-Z_][a-zA-Z_0-9]*"),
     OPEN_PARENTHESES("\\("),
     OPEN_INCLUDE("<"),
@@ -229,7 +184,6 @@ enum TokenT {
     CLOSE_PARENTHESES("\\)"),
     CLOSE_INCLUDE(">"),
     CLOSE_BRACE("}"),
-    INT_CONSTANT("[0-9]+"),
     EQUALS("="),
     PLUS("\\+"),
     MINUS("-"),
@@ -278,8 +232,36 @@ class Tokens {
     public ArrayList<TokenT> getTypes() {
         return types;
     }
+}
 
-    public int getMaxIndex() {
-        return index;
+
+class ParseAST {
+
+    private String functionName;
+    private TokenT returnType;
+    private int returnValue;
+
+    public void setFunctionName(String functionN){
+        functionName = functionN;
+    }
+
+    public void setReturnType(TokenT returnT){
+        returnType = returnT;
+    }
+
+    public void setReturnValue(int returnV){
+        returnValue = returnV;
+    }
+
+    public String getFunctionName(){
+        return functionName;
+    }
+
+//    public TokenT getReturnType(){
+//        return returnType;
+//    }
+
+    public int getReturnValue(){
+        return returnValue;
     }
 }
