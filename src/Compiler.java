@@ -4,7 +4,7 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class Compiler {
+class Compiler {
     private final Scanner scanner;
     private final Tokens tokens = new Tokens();
 
@@ -56,7 +56,6 @@ public class Compiler {
     //-------------------------------------------Parsing-----------------------------------------
 
     private int i = 0;//current index
-
     private ParseAST parseAST = new ParseAST();
 
     public boolean startParsing() {
@@ -139,6 +138,8 @@ public class Compiler {
     }
 
     //-----------------------------------------Generation---------------------------------------
+
+    StringBuilder asmProgram = new StringBuilder();
 
     public String generator(){
         String functionName = parseAST.getFunctionName();
@@ -257,9 +258,9 @@ class ParseAST {
         return functionName;
     }
 
-//    public TokenT getReturnType(){
-//        return returnType;
-//    }
+    public TokenT getReturnType(){
+        return returnType;
+    }
 
     public int getReturnValue(){
         return returnValue;
