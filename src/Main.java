@@ -1,4 +1,5 @@
 import java.io.*;
+import java.util.Objects;
 
 public class Main {
 
@@ -13,11 +14,11 @@ public class Main {
         boolean error = compiler.startLexing();
         if(error) return;
 
-        boolean notError = compiler.startParsing();
-        if(!notError) return;
+        Node node = compiler.startParsing();
+        if(Objects.isNull(node)) return;
         System.out.println("Successful parsing!");
 
-        String codeASM = compiler.generator();
+        String codeASM = compiler.generator(node);
         try {
             FileWriter myWriter = new FileWriter("1-1-java-IV-81-Bazova.asm");
             myWriter.write(codeASM);

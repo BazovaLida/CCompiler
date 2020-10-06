@@ -1,4 +1,4 @@
 int main(){ // C language
 
-    return 2.87;
+    return -3/((2/1)/4);
 }
