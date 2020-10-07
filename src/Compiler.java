@@ -182,13 +182,9 @@ class Compiler {
             if (curr.hasNextChild()) {
                 curr = curr.getChild();
             } else {
-                if (curr == node) {
-                    curr.getCode(code, lineSep);
-                    done = true;
-                } else {
-                    curr.getCode(code, lineSep);
-                    curr = curr.getParent();
-                }
+                curr.getCode(code, lineSep);
+                if (curr == node) done = true;
+                else curr = curr.getParent();
             }
         }
 
