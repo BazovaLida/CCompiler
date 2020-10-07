@@ -1,6 +1,8 @@
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Objects;
+import java.util.Scanner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -46,18 +48,23 @@ class Compiler {
 
     //-------------------------------------------Parsing-----------------------------------------
     public Node startParsing() {
-        if(tokens.getFirstType().equals(TokenT.KEYWORD_INT) && tokens.getNextType().equals(TokenT.IDENTIFIER)
-        && tokens.getNextType().equals(TokenT.OPEN_PARENTHESES) && tokens.getNextType().equals(TokenT.CLOSE_PARENTHESES)
-        && tokens.getNextType().equals(TokenT.OPEN_BRACE) && tokens.getNextType().equals(TokenT.KEYWORD_RETURN)) {
+        if(tokens.getFirstType().equals(TokenT.KEYWORD_INT) &&
+                tokens.getNextType().equals(TokenT.IDENTIFIER) &&
+                tokens.getNextType().equals(TokenT.OPEN_PARENTHESES) &&
+                tokens.getNextType().equals(TokenT.CLOSE_PARENTHESES) &&
+                tokens.getNextType().equals(TokenT.OPEN_BRACE) &&
+                tokens.getNextType().equals(TokenT.KEYWORD_RETURN)) {
             Node.functionName = tokens.getToken(1);
 
             Node basicNode = new Node("return", 2);
             Node mainNode = parseStatement(basicNode);
-            if (tokens.getNextType().equals(TokenT.CLOSE_BRACE)){
-                return mainNode;
-            }
+            assert mainNode != null;
+            if (tokens.getNextType().equals(TokenT.CLOSE_BRACE) && mainNode.hasValChild()) {
+                if (mainNode.equals(basicNode)) {
+                    return mainNode;
+                } else System.out.println("\"()\" are not closed!");
+            } else System.out.println("Error while parsing.");
         }
-        System.out.println("Error while parsing");
         return null;
     }
 
@@ -65,9 +72,15 @@ class Compiler {
         TokenT currTokenT = tokens.getNextType();
         while (!currTokenT.equals(TokenT.SEMICOLONS)) {
             if (currTokenT.equals(TokenT.NEGATION)) {
-                Node childNode = new Node("-", 1);
-                currNode.addChild(childNode);
-                currNode = childNode;
+                if (currNode.getValue().equals("(") || currNode.getValue().equals("return")) {
+                    Node childNode = new Node("-", 1);
+                    currNode.addChild(childNode);
+                    currNode = childNode;
+                }
+                else{
+                    System.out.println("Error while parsing \"-\": it is without ()");
+                    return null;
+                }
             }
             else if (currTokenT.equals(TokenT.DIVISION)) {
                 if(currNode.hasNextChild()) {
@@ -84,12 +97,19 @@ class Compiler {
                 currNode = childNode;
             }
             else if (currTokenT.equals(TokenT.CLOSE_PARENTHESES)) {
-                while (!currNode.getValue().equals("(")) {
-                    currNode = currNode.getParent();
+                try {
+                    while (!currNode.getValue().equals("(")) {
+                        currNode = currNode.getParent();
+                    }
+                } catch (NullPointerException e){
+                    System.out.println("Error while parsing ()");
+                    return null;
                 }
-                Node parent = currNode.getParent();
-                parent.replaceChild(currNode, currNode.getChild());
-                currNode = parent;
+                if(currNode.hasMaxChildren()) {
+                    Node parent = currNode.getParent();
+                    parent.replaceChild(currNode, currNode.getChild());
+                    currNode = parent;
+                }
             }
             else {
                 String val = parseValue(currTokenT);
@@ -105,23 +125,6 @@ class Compiler {
             currTokenT = tokens.getNextType();
         }
         return currNode;
-//
-//        currTokenT = tokens.getNextType();
-//        if (currTokenT.equals(TokenT.CLOSE_PARENTHESES)) {
-//            headNode.braceClose();
-//            return headNode;
-//        } else if (currTokenT.equals(TokenT.SEMICOLONS) && headNode.braceClosed()) {
-//            tokens.indexMinus(1);
-//            return headNode;
-//        } else if (currTokenT.equals(TokenT.DIVISION)) {
-//            Node newHeadNode = new Node(headNode);
-//            newHeadNode.setValue("/");
-//            Node childNode = new Node();
-//            childNode = parseStatement(childNode);
-//            newHeadNode.addChild(childNode);
-//            return newHeadNode;
-//        } else {
-//        }
     }
 
     private String parseValue(TokenT firstVal){
@@ -144,52 +147,40 @@ class Compiler {
 
     public String generator(Node node){
         String functionName = Node.functionName;
-        String lineSep = System.getProperty("line.separator");
 
         StringBuilder code = new StringBuilder();
-        code.append(".486" + lineSep +
-                ".model flat, stdcall" + lineSep +
-                "option casemap :none" + lineSep + lineSep +
-                "include C:\\masm32\\include\\kernel32.inc" + lineSep +
-                "include C:\\masm32\\include\\masm32.inc"+ lineSep +
-                "include C:\\masm32\\include\\gdi32.inc"+ lineSep +
-                "include C:\\masm32\\include\\user32.inc"+ lineSep + lineSep +
-                "include C:\\masm32\\include\\windows.inc" + lineSep +
-                "include C:\\masm32\\macros\\macros.asm" + lineSep + lineSep +
-                "includelib C:\\masm32\\lib\\kernel32.lib" + lineSep +
-                "includelib C:\\masm32\\lib\\masm32.lib" + lineSep +
-                "includelib C:\\masm32\\lib\\gdi32.lib" + lineSep +
-                "includelib C:\\masm32\\lib\\user32.lib" + lineSep + lineSep +
-                functionName + " PROTO" + lineSep + lineSep +
-
-                ".data" + lineSep + lineSep +
-//                "ConsoleTitle byte \"My Title\", 0" + lineSep +
-//                "Text1 byte \"Text\", 0" + lineSep +
-//                "Num sdword -5" + lineSep +
-
-                ".code" + lineSep + lineSep +
-                "start:" + lineSep + lineSep +
-//                "invoke StdOut, addr Text1" + lineSep +
-//                "print str$(Num)" + lineSep +
-//                "" + lineSep +
-
-                "invoke " + functionName + lineSep +
-                "invoke ExitProcess, 0" + lineSep + lineSep +
-                functionName + " PROC" + lineSep);
+        code.append(".386\n")
+                .append(".model flat, stdcall\n")
+                .append("option casemap :none\n\n")
+                .append("include C:\\masm32\\include\\kernel32.inc\n")
+                .append("include C:\\masm32\\include\\user32.inc\n\n")
+                .append("includelib C:\\masm32\\lib\\kernel32.lib\n")
+                .append("includelib C:\\masm32\\lib\\user32.lib\n\n")
+                .append(functionName).append(" PROTO\n\n")
+                .append(".data\n")
+                .append("msg_title db \"Результат обчислень виразу\", 0\n")
+                .append("buffer db 128 dup(?)\n")
+                .append("format db \"%d\",0\n\n")
+                .append(".code\n")
+                .append("start:\n")
+                .append("\tinvoke ").append(functionName)
+                .append("\n\tinvoke wsprintf, addr buffer, addr format, eax\n")
+                .append("\tinvoke MessageBox, 0, addr buffer, addr msg_title, 0\n")
+                .append("\tinvoke ExitProcess, 0\n\n")
+                .append(functionName).append(" PROC\n");
         Node curr = node;
         boolean done = false;
         while (!done){
             if (curr.hasNextChild()) {
                 curr = curr.getChild();
             } else {
-                curr.getCode(code, lineSep);
+                curr.codeGenerate(code);
                 if (curr == node) done = true;
                 else curr = curr.getParent();
             }
         }
 
-//                "mov eax, " + returnValue + lineSep +
-        code.append("END start" + lineSep);
+        code.append("END start\n");
         return code.toString();
     }
 }
@@ -245,16 +236,9 @@ class Tokens {
         }
         tokens.add(index, curr);
         types.add(index, getType(curr));
-        System.out.println(curr + " is " + types.get(index) + " type");
+        System.out.println("   \"" + curr + "\" is " + types.get(index) + " type");
         prev = curr;
         return types.get(index) != TokenT.UNKNOWN;
-    }
-
-    public void deletePrev(){
-        tokens.remove(index);
-        types.remove(index);
-        System.out.println("^ removed: comments");
-        index --;
     }
 
     private TokenT getType(String next) {
@@ -294,29 +278,26 @@ class Node {
     private final ArrayList<Node> children;
     private String value;
     private int index;
-    private int maxChildren;
+    private final int maxChildren;
     private int childrenCount;
     public static String functionName;
+    private static boolean hasValue = false;
 
-    public Node(){
+    public Node(String value, int maxChildren){
         this.children = new ArrayList<>(1);
         this.value = "";
         this.index = 0;
         this.childrenCount = 0;
-    }
-    public Node(String inst, int maxChildren){
-        this.children = new ArrayList<>(1);
-        this.value = "";
-        this.index = 0;
-        this.childrenCount = 0;
-        this.value = inst;
+        this.value = value;
         this.maxChildren = maxChildren;
+        if (value.matches("[0-9]+")){
+            hasValue = true;
+        }
     }
 
     public String getValue(){
         return this.value;
     }
-
 
     public void setParent(Node p){
         this.parent = p;
@@ -332,18 +313,6 @@ class Node {
         ch.setParent(this);
     }
 
-    public void addLeftChild(Node ch){
-        Node insert = ch;
-        ch.setParent(this);
-        Node saved;
-        for(int i = 0; i < this.children.size(); i++){
-            saved = this.children.get(i);
-            this.children.set(i, insert);
-            insert = saved;
-        }
-        this.addChild(insert);
-    }
-
     public Node getChild(){
         Node child = this.children.get(this.index);
         index ++;
@@ -354,10 +323,6 @@ class Node {
         Node child = this.children.remove(this.index);
         childrenCount --;
         return child;
-    }
-
-    public boolean isEmpty(){
-        return this.value.isEmpty();
     }
 
     public boolean hasNextChild(){
@@ -374,21 +339,32 @@ class Node {
         newChild.setParent(this);
     }
 
-    public void getCode(StringBuilder code, String lineSep) {
+    public void codeGenerate(StringBuilder code) {
         switch (value) {
             case "/":
-                code.append(lineSep + "pop BL" + lineSep + "pop AX" + lineSep + "div BL" + lineSep + "push AL" + lineSep + lineSep);
+                code.append("\tmov edx, 0\n")
+                        .append("\tpop ECX\n")
+                        .append("\tpop EAX\n")
+                        .append("\tidiv ECX\n")
+                        .append("\tpush EAX\n\n");
                 break;
             case "-":
-                code.append("pop eax" + lineSep + "neg eax" + lineSep + "push eax" + lineSep + lineSep);
+                code.append("\tpop EBX\n")
+                        .append("\tneg EBX\n")
+                        .append("\tpush EBX\n\n");
                 break;
             case "return":
-                code.append(lineSep + "pop eax ;here is the result" + lineSep + lineSep);
-                code.append("ret" + lineSep + functionName + " ENDP" + lineSep);
+                code.append("\tpop eax ;here is the result\n\n")
+                        .append("\tret\n")
+                        .append(functionName).append(" ENDP\n\n");
                 break;
             default:
-                code.append("push " + this.value + lineSep);
+                code.append("\tpush ").append(this.value).append("\n");
                 break;
         }
+    }
+
+    public boolean hasValChild() {
+        return hasValue;
     }
 }

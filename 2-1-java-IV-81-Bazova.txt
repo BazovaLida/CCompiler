@@ -1,0 +1,3 @@
+int main(){ //C language
+    return -(-30)/3;
+}

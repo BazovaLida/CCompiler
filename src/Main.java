@@ -1,13 +1,13 @@
-import java.io.*;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.Objects;
 
 public class Main {
 
     public static void main(String[] args) throws FileNotFoundException {
-        //for linux:
-        var file = new File("1-1-java-IV-81-Bazova.txt");
-        //for windows:
-        //var file = new File("src/1-1-java-IV-81-Bazova.txt");
+        var file = new File("2-1-java-IV-81-Bazova.txt");
 
         Compiler compiler = new Compiler(file);
 
@@ -20,7 +20,7 @@ public class Main {
 
         String codeASM = compiler.generator(node);
         try {
-            FileWriter myWriter = new FileWriter("1-1-java-IV-81-Bazova.asm");
+            FileWriter myWriter = new FileWriter("2-1-java-IV-81-Bazova.asm");
             myWriter.write(codeASM);
             myWriter.close();
             System.out.println("Successfully wrote to the file.");
