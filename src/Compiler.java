@@ -1,6 +1,7 @@
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.Objects;
 import java.util.Scanner;
 import java.util.regex.Matcher;
@@ -47,20 +48,58 @@ class Compiler {
     }
 
     //-------------------------------------------Parsing-----------------------------------------
+    EnumSet<TokenT> keywordsTypes = EnumSet.of(TokenT.KEYWORD_FLOAT, TokenT.KEYWORD_INT);
     public Node startParsing() {
         if(tokens.getFirstType().equals(TokenT.KEYWORD_INT) &&
                 tokens.getNextType().equals(TokenT.IDENTIFIER) &&
                 tokens.getNextType().equals(TokenT.OPEN_PARENTHESES) &&
                 tokens.getNextType().equals(TokenT.CLOSE_PARENTHESES) &&
-                tokens.getNextType().equals(TokenT.OPEN_BRACE) &&
-                tokens.getNextType().equals(TokenT.KEYWORD_RETURN)) {
+                tokens.getNextType().equals(TokenT.OPEN_BRACE)) {
             Node.functionName = tokens.getToken(1);
 
-            Node basicNode = new Node("return", 2);
-            Node mainNode = parseStatement(basicNode);
+            TokenT currTokenT = tokens.getNextType();
+            Node currNode = new Node("main", 100);
+            ArrayList<String> variables = new ArrayList<>();
+            boolean hasType;
+
+            while(!currTokenT.equals(TokenT.KEYWORD_RETURN)){
+                hasType = false;
+                if(keywordsTypes.contains(currTokenT) && currNode.getValue().equals("main")) {
+                    Node child = new Node(tokens.getCurrToken(), 1);
+                    currNode.addChild(child);
+                    currNode = child;
+                    hasType = true;
+                }
+
+                if(tokens.getNextType().equals(TokenT.IDENTIFIER)){
+                    if (!hasType && currNode.getValue().equals("main") && !variables.contains(tokens.getCurrToken())){
+                        System.out.println("Error! There is untyped var!");
+                        return null;
+                    }
+
+                    Node var = new Node(tokens.getCurrToken(), 2);
+                    variables.add(tokens.getCurrToken());
+                    currNode.addChild(var);
+                    currNode = var;
+                    currTokenT = tokens.getNextType();
+
+                    if(currTokenT.equals(TokenT.EQUALS)){
+                        Node stat = parseStatement(currNode);
+                    } else if(currTokenT.equals(TokenT.SEMICOLONS)){
+                        break;
+                    }
+
+                } else{
+                    System.out.println("No identifier after the type keyword!");
+                    return null;
+                }
+                parseStatement()
+            }
+//            Node basicNode = new Node("return", 2);
+//            Node mainNode = parseStatement(basicNode);
             assert mainNode != null;
             if (tokens.getNextType().equals(TokenT.CLOSE_BRACE) && mainNode.hasValChild()) {
-                if (mainNode.equals(basicNode)) {
+                if (mainNode.equals(currNode)) {
                     return mainNode;
                 } else System.out.println("\"()\" are not closed!");
             } else System.out.println("Error while parsing.");
@@ -85,6 +124,15 @@ class Compiler {
             else if (currTokenT.equals(TokenT.DIVISION)) {
                 if(currNode.hasNextChild()) {
                     Node binaryNode = new Node("/", 2);
+                    Node child = currNode.removeChild();
+                    binaryNode.addChild(child);
+                    currNode.addChild(binaryNode);
+                    currNode = binaryNode;
+                } else break;
+            }
+            else if (currTokenT.equals(TokenT.MULTIPLICATION)) {
+                if(currNode.hasNextChild()) {
+                    Node binaryNode = new Node("*", 2);
                     Node child = currNode.removeChild();
                     binaryNode.addChild(child);
                     currNode.addChild(binaryNode);
@@ -346,6 +394,13 @@ class Node {
                         .append("\tpop ECX\n")
                         .append("\tpop EAX\n")
                         .append("\tidiv ECX\n")
+                        .append("\tpush EAX\n\n");
+                break;
+            case "*":
+                code.append("\tmov edx, 0\n")
+                        .append("\tpop ECX\n")
+                        .append("\tpop EAX\n")
+                        .append("\timul ECX\n")
                         .append("\tpush EAX\n\n");
                 break;
             case "-":

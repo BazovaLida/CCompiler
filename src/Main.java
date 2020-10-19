@@ -7,7 +7,7 @@ import java.util.Objects;
 public class Main {
 
     public static void main(String[] args) throws FileNotFoundException {
-        var file = new File("2-1-java-IV-81-Bazova.txt");
+        var file = new File("3-1-java-IV-81-Bazova.txt");
 
         Compiler compiler = new Compiler(file);
 
@@ -20,7 +20,7 @@ public class Main {
 
         String codeASM = compiler.generator(node);
         try {
-            FileWriter myWriter = new FileWriter("2-1-java-IV-81-Bazova.asm");
+            FileWriter myWriter = new FileWriter("3-1-java-IV-81-Bazova.asm");
             myWriter.write(codeASM);
             myWriter.close();
             System.out.println("Successfully wrote to the file.");
