@@ -134,12 +134,10 @@ class Compiler {
                     currNode.addChild(childNode);
                     currNode = childNode;
                 } else return parseError("Error while parsing \"-\": it is without ()");
-            }
-
-            else if (binaryOp.contains(currTokenT)) {
-                if(currTokenT.equals(TokenT.LOGICAL_AND)){
+            } else if (binaryOp.contains(currTokenT)) {
+                if (currTokenT.equals(TokenT.LOGICAL_AND)) {
                     while (currNode.hasMaxChildren() &&
-                            !currNode.getValue().equals("(") && !currNode.equals(basic)){
+                            !currNode.getValue().equals("(") && !currNode.equals(basic)) {
                         currNode = currNode.getParent();
                     }
                 }
@@ -151,9 +149,7 @@ class Compiler {
                     currNode.addChild(binaryNode);
                     currNode = binaryNode;
                 } else return parseError("Invalid binary operation syntax");
-            }
-
-            else if (currTokenT.equals(TokenT.OPEN_PARENTHESES)) {
+            } else if (currTokenT.equals(TokenT.OPEN_PARENTHESES)) {
                 Node childNode = new Node("(", 1);
                 currNode.addChild(childNode);
                 currNode = childNode;
@@ -216,7 +212,7 @@ class Compiler {
                 .append("includelib C:\\masm32\\lib\\user32.lib\n\n")
                 .append(funcName).append(" PROTO\n\n")
                 .append(".data\n")
-                .append("msg_title db \"Результат обчислень виразу\", 0\n")
+                .append("msg_title db \"Result\", 0\n")
                 .append("buffer db 128 dup(?)\n")
                 .append("format db \"%d\",0\n\n")
                 .append(".code\n")
@@ -226,8 +222,8 @@ class Compiler {
                 .append("\tinvoke MessageBox, 0, addr buffer, addr msg_title, 0\n")
                 .append("\tinvoke ExitProcess, 0\n\n")
                 .append(funcName).append(" PROC\n")
-                .append("\tpush ebp           ; пролог: сохранение EBP\n")
-                .append("\tmov ebp, esp       ; пролог: инициализация EBP\n\n");
+                .append("\tpush ebp\n")
+                .append("\tmov ebp, esp\n\n");
 
         Node curr = node;
         boolean done = false;
@@ -345,6 +341,7 @@ class Node {
     private int childrenCount;
     public static ArrayList<String> declaratedVar = new ArrayList<>();
     public static ArrayList<String> initializedVar = new ArrayList<>();
+    private static int counter;
 
     public Node(String value, int maxChildren) {
         this.children = new ArrayList<>(1);
@@ -398,12 +395,16 @@ class Node {
         newChild.setParent(this);
     }
 
+    public void setStartGen(){
+        counter = initializedVar.size() + 1;
+    }
+
     public void codeGenerate(StringBuilder code) {
-        if(value.matches("&&")){
+        if (value.matches("&&")) {
             code.append("\tpop ECX\n")
                     .append("\tpop EAX\n")
                     .append("\tcmp eax, 0   ; check if e1 is true\n")
-                    .append("\tjne @clause2   ; e1 is not 0, so we need to evaluate clause 2\n")
+                    .append("\tjne _clause2   ; e1 is not 0, so we need to evaluate clause 2\n")
                     .append("\tjmp _end\n")
                     .append("\t_clause2:\n")
                     .append("\t\tcmp ecx, 0 ; check if e2 is true\n")
@@ -411,37 +412,44 @@ class Node {
                     .append("\t\tsetne al\n\n")
                     .append("\t_end:\n")
                     .append("\t\tpush eax\n\n");
-        } else if(value.matches("\\*")){
+            counter -= 1;
+        } else if (value.matches("\\*")) {
             code.append("\tmov edx, 0\n")
                     .append("\tpop ECX\n")
                     .append("\tpop EAX\n")
                     .append("\timul ECX\n")
                     .append("\tpush EAX\n\n");
-        } else if(value.matches("/")){
+            counter -= 1;
+        } else if (value.matches("/")) {
             code.append("\tmov edx, 0\n")
                     .append("\tpop ECX\n")
                     .append("\tpop EAX\n")
                     .append("\tidiv ECX\n")
                     .append("\tpush EAX\n\n");
-        } else if(value.matches("-")) {
+            counter -= 1;
+        } else if (value.matches("-")) {
             code.append("\tpop EBX\n")
                     .append("\tneg EBX\n")
                     .append("\tpush EBX\n\n");
-        } else if(value.matches("return")) {
+        } else if (value.matches("return")) {
             code.append("\tpop eax ;here is the result\n")
                     .append("\tmov esp, ebp  ; restore ESP; now it points to old EBP\n")
                     .append("\tpop ebp       ; restore old EBP; now ESP is where it was before prologue\n")
                     .append("\tret\n");
-        } else if(value.matches("[0-9]+")) {
-            code.append("\tpush ").append(value).append("\n\n");
-        } else if(value.matches("[a-zA-Z_][a-zA-Z_0-9]*_var")) {
-            if (this.childrenCount > 0){
+        } else if (value.matches("[0-9]+")) {
+            code.append("\tmov [esp-" + counter*4 + "], " + value + "\n\n");
+            counter += 1;
+        } else if (value.matches("[a-zA-Z_][a-zA-Z_0-9]*_var")) {
+            if (this.childrenCount > 0) {
                 int point = (declaratedVar.indexOf(value) + 1) * 4;
-                code.append("\tpop eax\n").append("\tmov [ebp-").append(point).append("], eax\n\n");
+                code.append("\tpop eax\n")
+                        .append("\tmov [esp-").append(point).append("], eax   ;\n\n");
+                counter -= 1;
             }
-        } else if(value.matches("[a-zA-Z_][a-zA-Z_0-9]*_val")) {
+        } else if (value.matches("[a-zA-Z_][a-zA-Z_0-9]*_val")) {
             int point = (declaratedVar.indexOf(value.substring(0, value.length() - 1) + "r") + 1) * 4;
-            code.append("\tpush [ebp-").append(point).append("]     ;").append(value).append("\n\n");
+            code.append("\tpush [esp-").append(point).append("]     ;").append(value).append("\n\n");
+            counter += 1;
         }
     }
 }

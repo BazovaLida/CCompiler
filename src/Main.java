@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.util.Objects;
 
 public class Main {
-
     public static void main(String[] args) throws FileNotFoundException {
         var file = new File("3-1-java-IV-81-Bazova.txt");
 
@@ -29,5 +28,4 @@ public class Main {
             e.printStackTrace();
         }
     }
-
 }

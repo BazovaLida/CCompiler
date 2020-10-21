@@ -11,7 +11,7 @@ includelib C:\masm32\lib\user32.lib
 main PROTO
 
 .data
-msg_title db "Результат обчислень виразу", 0
+msg_title db "Result", 0
 buffer db 128 dup(?)
 format db "%d",0
 
@@ -23,17 +23,22 @@ start:
 	invoke ExitProcess, 0
 
 main PROC
-	push ebp           ; пролог: сохранение EBP
-	mov ebp, esp       ; пролог: инициализация EBP
+	push ebp
+	mov ebp, esp
 
-	push 3
+	mov [esp-0], 0
 
 	pop eax
-	mov [ebp-8], eax
+	mov [esp-8], eax   ;
 
-	push [ebp-8]     ;b_val
+	mov [esp-0], 5
 
-	push 7
+	pop eax
+	mov [esp-4], eax   ;
+
+	mov [esp-0], 90
+
+	push [esp-4]     ;value1_val
 
 	mov edx, 0
 	pop ECX
@@ -41,10 +46,30 @@ main PROC
 	idiv ECX
 	push EAX
 
-	pop eax
-	mov [ebp-4], eax
+	push [esp-8]     ;b_val
 
-	push [ebp-8]     ;b_val
+	pop ECX
+	pop EAX
+	cmp eax, 0   ; check if e1 is true
+	jne _clause2   ; e1 is not 0, so we need to evaluate clause 2
+	jmp _end
+	_clause2:
+		cmp ecx, 0 ; check if e2 is true
+		mov eax, 0
+		setne al
+
+	_end:
+		push eax
+
+	pop eax
+	mov [esp-12], eax   ;
+
+	push [esp-12]     ;j_val
+
+	pop eax
+	mov [esp-4], eax   ;
+
+	push [esp-8]     ;b_val
 
 	pop eax ;here is the result
 	mov esp, ebp  ; restore ESP; now it points to old EBP
