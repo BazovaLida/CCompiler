@@ -15,14 +15,14 @@ class Compiler {
         scanner = new Scanner(input);
     }
 
-    //-------------------------------------------Lexing-----------------------------------------
+    //-------------------------------------------------------Lexing----------------------------------------------------
     public boolean startLexing() {
         boolean error;
         String currNextLine;
         String currNext;
 
         //ending of rows (with ";" or without it) and comments
-        Pattern pattern = Pattern.compile("/{2,}|b[01]+\\b|[0-9]+|[a-zA-Z_][a-zA-Z_0-9]*|\\S");
+        Pattern pattern = Pattern.compile("&{2}|/{2,}|b[01]+\\b|[0-9]+|[a-zA-Z_][a-zA-Z_0-9]*|\\S");
         Matcher matcher;
 
         System.out.println("List of lexems");
@@ -47,125 +47,135 @@ class Compiler {
         return false; //Lexing of program is successful
     }
 
-    //-------------------------------------------Parsing-----------------------------------------
-    EnumSet<TokenT> keywordsTypes = EnumSet.of(TokenT.KEYWORD_FLOAT, TokenT.KEYWORD_INT);
+    //------------------------------------------------------Parsing----------------------------------------------------
+    EnumSet<TokenT> typeKeyword = EnumSet.of(TokenT.KEYWORD_FLOAT, TokenT.KEYWORD_INT);
+    EnumSet<TokenT> binaryOp = EnumSet.of(TokenT.DIVISION, TokenT.MULTIPLICATION, TokenT.LOGICAL_AND);
+
     public Node startParsing() {
-        if(tokens.getFirstType().equals(TokenT.KEYWORD_INT) &&
-                tokens.getNextType().equals(TokenT.IDENTIFIER) &&
-                tokens.getNextType().equals(TokenT.OPEN_PARENTHESES) &&
-                tokens.getNextType().equals(TokenT.CLOSE_PARENTHESES) &&
-                tokens.getNextType().equals(TokenT.OPEN_BRACE)) {
-            Node.functionName = tokens.getToken(1);
+        if (!tokens.getFirstType().equals(TokenT.KEYWORD_INT) ||
+                !tokens.getNextType().equals(TokenT.IDENTIFIER)) return parseError("Invalid type of function");
 
-            TokenT currTokenT = tokens.getNextType();
-            Node currNode = new Node("main", 100);
-            ArrayList<String> variables = new ArrayList<>();
-            boolean hasType;
+        Node mainNode = new Node(tokens.currVal(), 100);
 
-            while(!currTokenT.equals(TokenT.KEYWORD_RETURN)){
-                hasType = false;
-                if(keywordsTypes.contains(currTokenT) && currNode.getValue().equals("main")) {
-                    Node child = new Node(tokens.getCurrToken(), 1);
-                    currNode.addChild(child);
-                    currNode = child;
-                    hasType = true;
-                }
+        if (!tokens.getNextType().equals(TokenT.OPEN_PARENTHESES) ||
+                !tokens.getNextType().equals(TokenT.CLOSE_PARENTHESES) ||
+                !tokens.getNextType().equals(TokenT.OPEN_BRACE)) return parseError("Invalid function syntax");
 
-                if(tokens.getNextType().equals(TokenT.IDENTIFIER)){
-                    if (!hasType && currNode.getValue().equals("main") && !variables.contains(tokens.getCurrToken())){
-                        System.out.println("Error! There is untyped var!");
-                        return null;
-                    }
+        Node newMain = parseVar(mainNode);
+        if (newMain == null || !newMain.equals(mainNode)) return null;
 
-                    Node var = new Node(tokens.getCurrToken(), 2);
-                    variables.add(tokens.getCurrToken());
-                    currNode.addChild(var);
-                    currNode = var;
-                    currTokenT = tokens.getNextType();
+        if (!tokens.getNextType().equals(TokenT.CLOSE_BRACE))
+            return parseError("Invalid the end of the function");
+        return mainNode;
+    }
 
-                    if(currTokenT.equals(TokenT.EQUALS)){
-                        Node stat = parseStatement(currNode);
-                    } else if(currTokenT.equals(TokenT.SEMICOLONS)){
-                        break;
-                    }
-
-                } else{
-                    System.out.println("No identifier after the type keyword!");
-                    return null;
-                }
-                parseStatement()
-            }
-//            Node basicNode = new Node("return", 2);
-//            Node mainNode = parseStatement(basicNode);
-            assert mainNode != null;
-            if (tokens.getNextType().equals(TokenT.CLOSE_BRACE) && mainNode.hasValChild()) {
-                if (mainNode.equals(currNode)) {
-                    return mainNode;
-                } else System.out.println("\"()\" are not closed!");
-            } else System.out.println("Error while parsing.");
-        }
+    private Node parseError(String msg) {
+        System.out.println(msg);
         return null;
+    }
+
+    private Node parseVar(Node currNode) {
+        Node mainNode = currNode;
+        TokenT currTokenT = tokens.getNextType();
+        boolean hasType;
+
+        while (!currTokenT.equals(TokenT.KEYWORD_RETURN)) {
+            currNode = mainNode;
+            hasType = false;
+            if (typeKeyword.contains(currTokenT)) {
+                hasType = true;
+                currTokenT = tokens.getNextType();
+            }
+
+            if (!currTokenT.equals(TokenT.IDENTIFIER)) {
+                return parseError("The body of the function is built wrong");
+            }
+
+            if (hasType) {
+                if (Node.declaratedVar.contains(tokens.currVal())) {
+                    return parseError("The variable " + tokens.currVal() + " is declarated several times!");
+                } else Node.declaratedVar.add(tokens.currVal() + "_var");
+            } else if (!Node.declaratedVar.contains(tokens.currVal() + "_var")) {
+                return parseError("Variable " + tokens.currVal() + " initialized, but not declarated");
+            }
+
+            Node var = new Node(tokens.currVal() + "_var", 2);
+            currNode.addChild(var);
+            currNode = var;
+
+            currTokenT = tokens.getNextType();
+            if (currTokenT.equals(TokenT.SEMICOLONS)) {
+                currTokenT = tokens.getNextType();
+            } else if (currTokenT.equals(TokenT.EQUALS)) {
+                Node.initializedVar.add(currNode.getValue());
+                Node statNode = parseStatement(currNode);
+                if (statNode == null || !statNode.equals(currNode))
+                    return parseError("Error while parsing statement");
+                currTokenT = tokens.getNextType();
+            } else return parseError("Error occurred after variable " + tokens.currVal());
+        }
+
+        Node retNode = new Node("return", 2);
+        mainNode.addChild(retNode);
+        Node newRet = parseStatement(retNode);
+        if (newRet == null || !newRet.equals(retNode))
+            return parseError("Error while parsing statement after \"return\"");
+        return mainNode;
     }
 
     private Node parseStatement(Node currNode) {
         TokenT currTokenT = tokens.getNextType();
+        Node basic = currNode;
+
         while (!currTokenT.equals(TokenT.SEMICOLONS)) {
             if (currTokenT.equals(TokenT.NEGATION)) {
-                if (currNode.getValue().equals("(") || currNode.getValue().equals("return")) {
+                if (currNode.getValue().equals("(") || currNode.equals(basic)) {
                     Node childNode = new Node("-", 1);
                     currNode.addChild(childNode);
                     currNode = childNode;
-                }
-                else{
-                    System.out.println("Error while parsing \"-\": it is without ()");
-                    return null;
-                }
+                } else return parseError("Error while parsing \"-\": it is without ()");
             }
-            else if (currTokenT.equals(TokenT.DIVISION)) {
-                if(currNode.hasNextChild()) {
-                    Node binaryNode = new Node("/", 2);
+
+            else if (binaryOp.contains(currTokenT)) {
+                if(currTokenT.equals(TokenT.LOGICAL_AND)){
+                    while (currNode.hasMaxChildren() &&
+                            !currNode.getValue().equals("(") && !currNode.equals(basic)){
+                        currNode = currNode.getParent();
+                    }
+                }
+
+                if (currNode.hasNextChild()) {
+                    Node binaryNode = new Node(tokens.currVal(), 2);
                     Node child = currNode.removeChild();
                     binaryNode.addChild(child);
                     currNode.addChild(binaryNode);
                     currNode = binaryNode;
-                } else break;
+                } else return parseError("Invalid binary operation syntax");
             }
-            else if (currTokenT.equals(TokenT.MULTIPLICATION)) {
-                if(currNode.hasNextChild()) {
-                    Node binaryNode = new Node("*", 2);
-                    Node child = currNode.removeChild();
-                    binaryNode.addChild(child);
-                    currNode.addChild(binaryNode);
-                    currNode = binaryNode;
-                } else break;
-            }
+
             else if (currTokenT.equals(TokenT.OPEN_PARENTHESES)) {
                 Node childNode = new Node("(", 1);
                 currNode.addChild(childNode);
                 currNode = childNode;
-            }
-            else if (currTokenT.equals(TokenT.CLOSE_PARENTHESES)) {
+            } else if (currTokenT.equals(TokenT.CLOSE_PARENTHESES)) {
                 try {
                     while (!currNode.getValue().equals("(")) {
                         currNode = currNode.getParent();
                     }
-                } catch (NullPointerException e){
-                    System.out.println("Error while parsing ()");
-                    return null;
+                } catch (NullPointerException e) {
+                    return parseError("Error while parsing ()");
                 }
-                if(currNode.hasMaxChildren()) {
+                if (currNode.hasMaxChildren()) {
                     Node parent = currNode.getParent();
                     parent.replaceChild(currNode, currNode.getChild());
                     currNode = parent;
                 }
-            }
-            else {
+            } else {
                 String val = parseValue(currTokenT);
                 if (Objects.nonNull(val)) {
                     Node childNode = new Node(val, 0);
                     currNode.addChild(childNode);
-                }
-                else return null;
+                } else return parseError("Error while parsing value");
             }
             while (currNode.hasMaxChildren() && !currNode.getValue().equals("(")) {
                 currNode = currNode.getParent();
@@ -175,28 +185,28 @@ class Compiler {
         return currNode;
     }
 
-    private String parseValue(TokenT firstVal){
+    private String parseValue(TokenT firstVal) {
         if (firstVal.equals(TokenT.INT_CONSTANT)) {
-            String val = tokens.getCurrToken();
+            String val = tokens.currVal();
             if (!(tokens.getNextType().equals(TokenT.DOT) & tokens.getNextType().equals(TokenT.INT_CONSTANT))) {
                 tokens.indexMinus(2);
             }
             return val;
-        }if (firstVal.equals(TokenT.INT_BIN_CONSTANT)){
-            String val = tokens.getCurrToken().substring(1);
+        } else if (firstVal.equals(TokenT.INT_BIN_CONSTANT)) {
+            String val = tokens.currVal().substring(1);
             val = Integer.toString(Integer.parseInt(val, 2));
             return val;
+        } else if (Node.initializedVar.contains(tokens.currVal() + "_var")) {
+            return tokens.currVal() + "_val";
         }
-        System.out.println("Error while parsing value");
         return null;
     }
 
-    //-----------------------------------------Generation---------------------------------------
+    //----------------------------------------------------Generation--------------------------------------------------
 
-    public String generator(Node node){
-        String functionName = Node.functionName;
-
+    public String generator(Node node) {
         StringBuilder code = new StringBuilder();
+        String funcName = node.getValue();
         code.append(".386\n")
                 .append(".model flat, stdcall\n")
                 .append("option casemap :none\n\n")
@@ -204,21 +214,24 @@ class Compiler {
                 .append("include C:\\masm32\\include\\user32.inc\n\n")
                 .append("includelib C:\\masm32\\lib\\kernel32.lib\n")
                 .append("includelib C:\\masm32\\lib\\user32.lib\n\n")
-                .append(functionName).append(" PROTO\n\n")
+                .append(funcName).append(" PROTO\n\n")
                 .append(".data\n")
                 .append("msg_title db \"Результат обчислень виразу\", 0\n")
                 .append("buffer db 128 dup(?)\n")
                 .append("format db \"%d\",0\n\n")
                 .append(".code\n")
                 .append("start:\n")
-                .append("\tinvoke ").append(functionName)
+                .append("\tinvoke ").append(funcName)
                 .append("\n\tinvoke wsprintf, addr buffer, addr format, eax\n")
                 .append("\tinvoke MessageBox, 0, addr buffer, addr msg_title, 0\n")
                 .append("\tinvoke ExitProcess, 0\n\n")
-                .append(functionName).append(" PROC\n");
+                .append(funcName).append(" PROC\n")
+                .append("\tpush ebp           ; пролог: сохранение EBP\n")
+                .append("\tmov ebp, esp       ; пролог: инициализация EBP\n\n");
+
         Node curr = node;
         boolean done = false;
-        while (!done){
+        while (!done) {
             if (curr.hasNextChild()) {
                 curr = curr.getChild();
             } else {
@@ -228,7 +241,8 @@ class Compiler {
             }
         }
 
-        code.append("END start\n");
+        code.append(funcName).append(" ENDP\n")
+                .append("END start\n");
         return code.toString();
     }
 }
@@ -252,6 +266,7 @@ enum TokenT {
     CLOSE_BRACE("}"),
     EQUALS("="),
     BITWISE_COMPLEMENT("~"),
+    LOGICAL_AND("&&"),
     LOGICAL_NEGATION("!"),
     ADDITION("\\+"),
     NEGATION("-"),
@@ -279,8 +294,8 @@ class Tokens {
 
     public boolean setPair(String curr) {
         index++;
-        if(prev.equals("0") && getType(curr).equals(TokenT.INT_BIN_CONSTANT)){
-            index --;
+        if (prev.equals("0") && getType(curr).equals(TokenT.INT_BIN_CONSTANT)) {
+            index--;
         }
         tokens.add(index, curr);
         types.add(index, getType(curr));
@@ -298,128 +313,135 @@ class Tokens {
         return TokenT.UNKNOWN;
     }
 
-    public String getCurrToken(){
-        return tokens.get(index);
-    }
-
-    public void indexMinus(int i){
+    public void indexMinus(int i) {
         index = index - i;
     }
 
-    public TokenT getFirstType(){
+    public TokenT getFirstType() {
         index = 0;
         return types.get(index);
     }
 
-    public TokenT getNextType(){
-        index ++;
+    public TokenT getNextType() {
+        index++;
         return types.get(index);
     }
 
-    public String getToken(int index) {
+    public String currVal() {
         return tokens.get(index);
+    }
+
+    public int currIndex() {
+        return index;
     }
 }
 
 class Node {
     private Node parent;
     private final ArrayList<Node> children;
-    private String value;
+    private final String value;
     private int index;
     private final int maxChildren;
     private int childrenCount;
-    public static String functionName;
-    private static boolean hasValue = false;
+    public static ArrayList<String> declaratedVar = new ArrayList<>();
+    public static ArrayList<String> initializedVar = new ArrayList<>();
 
-    public Node(String value, int maxChildren){
+    public Node(String value, int maxChildren) {
         this.children = new ArrayList<>(1);
-        this.value = "";
         this.index = 0;
         this.childrenCount = 0;
         this.value = value;
         this.maxChildren = maxChildren;
-        if (value.matches("[0-9]+")){
-            hasValue = true;
-        }
     }
 
-    public String getValue(){
+    public String getValue() {
         return this.value;
     }
 
-    public void setParent(Node p){
+    public void setParent(Node p) {
         this.parent = p;
     }
 
-    public Node getParent(){
+    public Node getParent() {
         return this.parent;
     }
 
-    public void addChild(Node ch){
-        childrenCount ++;
+    public void addChild(Node ch) {
+        childrenCount++;
         this.children.add(ch);
         ch.setParent(this);
     }
 
-    public Node getChild(){
+    public Node getChild() {
         Node child = this.children.get(this.index);
-        index ++;
+        index++;
         return child;
     }
 
-    public Node removeChild(){
+    public Node removeChild() {
         Node child = this.children.remove(this.index);
-        childrenCount --;
+        childrenCount--;
         return child;
     }
 
-    public boolean hasNextChild(){
+    public boolean hasNextChild() {
         return this.index < this.children.size();
     }
 
-    public boolean hasMaxChildren(){
+    public boolean hasMaxChildren() {
         return maxChildren == childrenCount;
     }
 
-    public void replaceChild(Node child, Node newChild){
+    public void replaceChild(Node child, Node newChild) {
         int i = this.children.indexOf(child);
         this.children.set(i, newChild);
         newChild.setParent(this);
     }
 
     public void codeGenerate(StringBuilder code) {
-        switch (value) {
-            case "/":
-                code.append("\tmov edx, 0\n")
-                        .append("\tpop ECX\n")
-                        .append("\tpop EAX\n")
-                        .append("\tidiv ECX\n")
-                        .append("\tpush EAX\n\n");
-                break;
-            case "*":
-                code.append("\tmov edx, 0\n")
-                        .append("\tpop ECX\n")
-                        .append("\tpop EAX\n")
-                        .append("\timul ECX\n")
-                        .append("\tpush EAX\n\n");
-                break;
-            case "-":
-                code.append("\tpop EBX\n")
-                        .append("\tneg EBX\n")
-                        .append("\tpush EBX\n\n");
-                break;
-            case "return":
-                code.append("\tpop eax ;here is the result\n\n")
-                        .append("\tret\n")
-                        .append(functionName).append(" ENDP\n\n");
-                break;
-            default:
-                code.append("\tpush ").append(this.value).append("\n");
-                break;
+        if(value.matches("&&")){
+            code.append("\tpop ECX\n")
+                    .append("\tpop EAX\n")
+                    .append("\tcmp eax, 0   ; check if e1 is true\n")
+                    .append("\tjne @clause2   ; e1 is not 0, so we need to evaluate clause 2\n")
+                    .append("\tjmp _end\n")
+                    .append("\t_clause2:\n")
+                    .append("\t\tcmp ecx, 0 ; check if e2 is true\n")
+                    .append("\t\tmov eax, 0\n")
+                    .append("\t\tsetne al\n\n")
+                    .append("\t_end:\n")
+                    .append("\t\tpush eax\n\n");
+        } else if(value.matches("\\*")){
+            code.append("\tmov edx, 0\n")
+                    .append("\tpop ECX\n")
+                    .append("\tpop EAX\n")
+                    .append("\timul ECX\n")
+                    .append("\tpush EAX\n\n");
+        } else if(value.matches("/")){
+            code.append("\tmov edx, 0\n")
+                    .append("\tpop ECX\n")
+                    .append("\tpop EAX\n")
+                    .append("\tidiv ECX\n")
+                    .append("\tpush EAX\n\n");
+        } else if(value.matches("-")) {
+            code.append("\tpop EBX\n")
+                    .append("\tneg EBX\n")
+                    .append("\tpush EBX\n\n");
+        } else if(value.matches("return")) {
+            code.append("\tpop eax ;here is the result\n")
+                    .append("\tmov esp, ebp  ; restore ESP; now it points to old EBP\n")
+                    .append("\tpop ebp       ; restore old EBP; now ESP is where it was before prologue\n")
+                    .append("\tret\n");
+        } else if(value.matches("[0-9]+")) {
+            code.append("\tpush ").append(value).append("\n\n");
+        } else if(value.matches("[a-zA-Z_][a-zA-Z_0-9]*_var")) {
+            if (this.childrenCount > 0){
+                int point = (declaratedVar.indexOf(value) + 1) * 4;
+                code.append("\tpop eax\n").append("\tmov [ebp-").append(point).append("], eax\n\n");
+            }
+        } else if(value.matches("[a-zA-Z_][a-zA-Z_0-9]*_val")) {
+            int point = (declaratedVar.indexOf(value.substring(0, value.length() - 1) + "r") + 1) * 4;
+            code.append("\tpush [ebp-").append(point).append("]     ;").append(value).append("\n\n");
         }
-    }
-
-    public boolean hasValChild() {
-        return hasValue;
     }
 }
