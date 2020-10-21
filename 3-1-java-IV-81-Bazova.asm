@@ -26,19 +26,19 @@ main PROC
 	push ebp
 	mov ebp, esp
 
-	mov [esp-0], 0
+	push 0
 
 	pop eax
-	mov [esp-8], eax   ;
+	mov [ebp-8], eax   ;
 
-	mov [esp-0], 5
+	push 5
 
 	pop eax
-	mov [esp-4], eax   ;
+	mov [ebp-4], eax   ;
 
-	mov [esp-0], 90
+	push 90
 
-	push [esp-4]     ;value1_val
+	push [ebp-4]     ;value1_val
 
 	mov edx, 0
 	pop ECX
@@ -46,7 +46,7 @@ main PROC
 	idiv ECX
 	push EAX
 
-	push [esp-8]     ;b_val
+	push [ebp-8]     ;b_val
 
 	pop ECX
 	pop EAX
@@ -62,14 +62,14 @@ main PROC
 		push eax
 
 	pop eax
-	mov [esp-12], eax   ;
+	mov [ebp-12], eax   ;
 
-	push [esp-12]     ;j_val
+	push [ebp-12]     ;j_val
 
 	pop eax
-	mov [esp-4], eax   ;
+	mov [ebp-4], eax   ;
 
-	push [esp-8]     ;b_val
+	push [ebp-8]     ;b_val
 
 	pop eax ;here is the result
 	mov esp, ebp  ; restore ESP; now it points to old EBP

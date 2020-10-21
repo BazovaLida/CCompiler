@@ -341,7 +341,6 @@ class Node {
     private int childrenCount;
     public static ArrayList<String> declaratedVar = new ArrayList<>();
     public static ArrayList<String> initializedVar = new ArrayList<>();
-    private static int counter;
 
     public Node(String value, int maxChildren) {
         this.children = new ArrayList<>(1);
@@ -395,10 +394,6 @@ class Node {
         newChild.setParent(this);
     }
 
-    public void setStartGen(){
-        counter = initializedVar.size() + 1;
-    }
-
     public void codeGenerate(StringBuilder code) {
         if (value.matches("&&")) {
             code.append("\tpop ECX\n")
@@ -412,21 +407,18 @@ class Node {
                     .append("\t\tsetne al\n\n")
                     .append("\t_end:\n")
                     .append("\t\tpush eax\n\n");
-            counter -= 1;
         } else if (value.matches("\\*")) {
             code.append("\tmov edx, 0\n")
                     .append("\tpop ECX\n")
                     .append("\tpop EAX\n")
                     .append("\timul ECX\n")
                     .append("\tpush EAX\n\n");
-            counter -= 1;
         } else if (value.matches("/")) {
             code.append("\tmov edx, 0\n")
                     .append("\tpop ECX\n")
                     .append("\tpop EAX\n")
                     .append("\tidiv ECX\n")
                     .append("\tpush EAX\n\n");
-            counter -= 1;
         } else if (value.matches("-")) {
             code.append("\tpop EBX\n")
                     .append("\tneg EBX\n")
@@ -437,19 +429,16 @@ class Node {
                     .append("\tpop ebp       ; restore old EBP; now ESP is where it was before prologue\n")
                     .append("\tret\n");
         } else if (value.matches("[0-9]+")) {
-            code.append("\tmov [esp-" + counter*4 + "], " + value + "\n\n");
-            counter += 1;
+            code.append("\tpush ").append(value).append("\n\n");
         } else if (value.matches("[a-zA-Z_][a-zA-Z_0-9]*_var")) {
             if (this.childrenCount > 0) {
                 int point = (declaratedVar.indexOf(value) + 1) * 4;
                 code.append("\tpop eax\n")
-                        .append("\tmov [esp-").append(point).append("], eax   ;\n\n");
-                counter -= 1;
+                        .append("\tmov [ebp-").append(point).append("], eax   ;\n\n");
             }
         } else if (value.matches("[a-zA-Z_][a-zA-Z_0-9]*_val")) {
             int point = (declaratedVar.indexOf(value.substring(0, value.length() - 1) + "r") + 1) * 4;
-            code.append("\tpush [esp-").append(point).append("]     ;").append(value).append("\n\n");
-            counter += 1;
+            code.append("\tpush [ebp-").append(point).append("]     ;").append(value).append("\n\n");
         }
     }
 }
