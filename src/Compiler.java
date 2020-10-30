@@ -1,5 +1,6 @@
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.sql.DriverPropertyInfo;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.Objects;
@@ -80,39 +81,66 @@ class Compiler {
         boolean hasType;
 
         while (!currTokenT.equals(TokenT.KEYWORD_RETURN)) {
-            currNode = mainNode;
             hasType = false;
             if (typeKeyword.contains(currTokenT)) {
                 hasType = true;
                 currTokenT = tokens.getNextType();
             }
 
-            if (!currTokenT.equals(TokenT.IDENTIFIER)) {
-                return parseError("The body of the function is built wrong");
-            }
+            if (currTokenT.equals(TokenT.IDENTIFIER)) {
+                currNode = mainNode;
+                if (hasType) {
+                    if (Node.declaratedVar.contains(tokens.currVal())) {
+                        return parseError("The variable " + tokens.currVal() + " is declarated several times!");
+                    } else Node.declaratedVar.add(tokens.currVal() + "_var");
+                } else if (!Node.declaratedVar.contains(tokens.currVal() + "_var")) {
+                    return parseError("Variable " + tokens.currVal() + " initialized, but not declarated");
+                }
 
-            if (hasType) {
-                if (Node.declaratedVar.contains(tokens.currVal())) {
-                    return parseError("The variable " + tokens.currVal() + " is declarated several times!");
-                } else Node.declaratedVar.add(tokens.currVal() + "_var");
-            } else if (!Node.declaratedVar.contains(tokens.currVal() + "_var")) {
-                return parseError("Variable " + tokens.currVal() + " initialized, but not declarated");
-            }
+                Node var = new Node(tokens.currVal() + "_var", 2);
+                currNode.addChild(var);
+                currNode = var;
 
-            Node var = new Node(tokens.currVal() + "_var", 2);
-            currNode.addChild(var);
-            currNode = var;
-
-            currTokenT = tokens.getNextType();
-            if (currTokenT.equals(TokenT.SEMICOLONS)) {
                 currTokenT = tokens.getNextType();
-            } else if (currTokenT.equals(TokenT.EQUALS)) {
-                Node.initializedVar.add(currNode.getValue());
-                Node statNode = parseStatement(currNode);
-                if (statNode == null || !statNode.equals(currNode))
-                    return parseError("Error while parsing statement");
-                currTokenT = tokens.getNextType();
-            } else return parseError("Error occurred after variable " + tokens.currVal());
+                if (currTokenT.equals(TokenT.SEMICOLONS)) {
+                    currTokenT = tokens.getNextType();
+                } else if (currTokenT.equals(TokenT.EQUALS)) {
+                    Node.initializedVar.add(currNode.getValue());
+                    Node statNode = parseStatement(currNode);
+                    if (statNode == null || !statNode.equals(currNode))
+                        return parseError("Error while parsing statement");
+                    currTokenT = tokens.getNextType();
+                } else return parseError("Error occurred after variable " + tokens.currVal());
+            } else if(hasType){
+                return parseError("Error while parsing! There is keyword and no variable after that");
+            } else if(hasType) {
+                return parseError("The body of the function is built wrong! There is no variable after type token.");
+            } else if (currTokenT.equals(TokenT.KEYWORD_IF)){
+                Node childNode = new Node("if", 1);
+                currNode.addChild(childNode);
+                currNode = childNode;
+            }else if (currTokenT.equals(TokenT.KEYWORD_ELSE)){
+                if(!currNode.getLastChild().getValue().equals("if"))
+                    return parseError("Error! 'else' without a previous 'if'");
+                Node childNode = new Node("else", 1);
+                currNode.addChild(childNode);
+                currNode = childNode;
+            } else if(currTokenT.equals(TokenT.OPEN_BRACE)){
+                Node childNode = new Node("{", 100);
+                currNode.addChild(childNode);
+                currNode = childNode;
+            } else if(currTokenT.equals(TokenT.CLOSE_BRACE)){
+                try {
+                    while (!currNode.getValue().equals("{")) {
+                        currNode = currNode.getParent();
+                    }
+                } catch (NullPointerException e) {
+                    return parseError("Error while parsing \"{}\". There are \"}\", but no \"{\" before it!");
+                }
+                currNode = currNode.getParent();
+                Node childNode = new Node("{", 0);
+                currNode.addChild(childNode);
+            }
         }
 
         Node retNode = new Node("return", 2);
@@ -145,7 +173,7 @@ class Compiler {
                 if (currNode.hasNextChild()) {
                     Node binaryNode = new Node(tokens.currVal(), 2);
                     Node child = currNode.removeChild();
-                    binaryNode.addChild(child);
+                    currNode = binaryNode.addChild(child);
                     currNode.addChild(binaryNode);
                     currNode = binaryNode;
                 } else return parseError("Invalid binary operation syntax");
@@ -159,7 +187,7 @@ class Compiler {
                         currNode = currNode.getParent();
                     }
                 } catch (NullPointerException e) {
-                    return parseError("Error while parsing ()");
+                    return parseError("Error while parsing \"()\" There are \")\", but no \"(\" before it!");
                 }
                 if (currNode.hasMaxChildren()) {
                     Node parent = currNode.getParent();
@@ -170,7 +198,7 @@ class Compiler {
                 String val = parseValue(currTokenT);
                 if (Objects.nonNull(val)) {
                     Node childNode = new Node(val, 0);
-                    currNode.addChild(childNode);
+                    currNode = currNode.addChild(childNode);
                 } else return parseError("Error while parsing value");
             }
             while (currNode.hasMaxChildren() && !currNode.getValue().equals("(")) {
@@ -250,6 +278,8 @@ enum TokenT {
     KEYWORD_DOUBLE("double"),
     KEYWORD_CHAR("char"),
     KEYWORD_VOID("void"),
+    KEYWORD_IF("if"),
+    KEYWORD_ELSE("else"),
     KEYWORD_RETURN("return"),
     INT_CONSTANT("[0-9]+"),
     INT_BIN_CONSTANT("b[01]+\\b"),
@@ -362,10 +392,14 @@ class Node {
         return this.parent;
     }
 
-    public void addChild(Node ch) {
+    public Node addChild(Node ch) {
+        Node curr = this;
+        while (this.hasMaxChildren() && (value.equals("if") || value.equals("else")))
+            curr = this.parent;
+        ch.setParent(curr);
         childrenCount++;
-        this.children.add(ch);
-        ch.setParent(this);
+        curr.children.add(ch);
+        return curr;
     }
 
     public Node getChild() {
@@ -428,6 +462,10 @@ class Node {
                     .append("\tmov esp, ebp  ; restore ESP; now it points to old EBP\n")
                     .append("\tpop ebp       ; restore old EBP; now ESP is where it was before prologue\n")
                     .append("\tret\n");
+        } else if (value.matches("if")) {
+
+        } else if (value.matches("else")) {
+
         } else if (value.matches("[0-9]+")) {
             code.append("\tpush ").append(value).append("\n\n");
         } else if (value.matches("[a-zA-Z_][a-zA-Z_0-9]*_var")) {
@@ -440,5 +478,10 @@ class Node {
             int point = (declaratedVar.indexOf(value.substring(0, value.length() - 1) + "r") + 1) * 4;
             code.append("\tpush [ebp-").append(point).append("]     ;").append(value).append("\n\n");
         }
+    }
+
+    public Node getLastChild() {
+        int index = this.children.size() - 1;
+        return this.children.get(index);
     }
 }
