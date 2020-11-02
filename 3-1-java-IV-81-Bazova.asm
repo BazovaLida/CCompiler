@@ -26,7 +26,15 @@ main PROC
 	push ebp
 	mov ebp, esp
 
-	push 1
+	push 9
+
+	push 90
+
+	push 0
+
+	push 20
+
+	push 30
 
 	push 1
 
@@ -34,17 +42,9 @@ main PROC
 	neg EBX
 	push EBX
 
-	pop eax
-	mov [ebp-4], eax   ;
+if	push 0
 
-	push 0
-
-	pop eax
-	mov [ebp-4], eax   ;
-
-	push [ebp-4]     ;a_val
-
-	pop eax ;here is the result
+else	pop eax ;here is the result
 	mov esp, ebp  ; restore ESP; now it points to old EBP
 	pop ebp       ; restore old EBP; now ESP is where it was before prologue
 	ret

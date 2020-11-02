@@ -94,7 +94,7 @@ class Compiler {
                     if (contained) {
                         return parseError("The variable " + tokens.currVal() + " is declarated several times!");
                     }
-                } else if (!contained) {
+                } else if (contained) {
                     return parseError("Variable " + tokens.currVal() + " initialized, but not declarated");
                 }
 
@@ -107,36 +107,44 @@ class Compiler {
                     currNode = currNode.getParent();
                 }
                 else if (currTokenT.equals(TokenT.EQUALS)) {
-                    vars.addVal(currNode.getValue());
-
                     Node statNode = parseStatement(currNode, TokenT.SEMICOLONS);
-                    if (statNode == null || !statNode.equals(currNode))
+                    if (statNode == null || !statNode.equals(currNode)) {
                         return parseError("Error while parsing statement");
+                    }
 
+                    if(!vars.addVal(currNode.getValue())){
+                        return parseError("Error while parsing! Variable " + currNode.getValue() + " is not initialised!");
+                    }
                     currNode = currNode.getParent();
-
-                } else return parseError("Error occurred after variable " + tokens.currVal());
-            } else if(hasType){
+                }
+                else return parseError("Error occurred after variable " + tokens.currVal());
+            }
+            else if(hasType){
                 return parseError("Error while parsing! There is keyword and no variable after that");
-            } else if (currTokenT.equals(TokenT.KEYWORD_IF)){
+            }
+            else if (currTokenT.equals(TokenT.KEYWORD_IF)){
                 Node childNode = new Node("if", 2);
                 currNode.addChild(childNode);
                 currNode = childNode;
                 if(!tokens.getNextType().equals(TokenT.OPEN_PARENTHESES))
                     System.out.println("error: expected '(' after 'if'");
                 parseStatement(currNode, TokenT.CLOSE_PARENTHESES);
-            } else if (currTokenT.equals(TokenT.KEYWORD_ELSE)){
+            }
+            else if (currTokenT.equals(TokenT.KEYWORD_ELSE)){
                 if(!currNode.getLastChild().getValue().equals("if"))
                     return parseError("Error! 'else' without a previous 'if'");
                 Node childNode = new Node("else", 1);
                 currNode.addChild(childNode);
                 currNode = childNode;
-            } else if(currTokenT.equals(TokenT.OPEN_BRACE)){
+            }
+            else if(currTokenT.equals(TokenT.OPEN_BRACE)){
+                vars = vars.openBrace();
                 Node childNode = new Node("{", 100);
                 currNode.addChild(childNode);
                 currNode = childNode;
             }
             else if(currTokenT.equals(TokenT.CLOSE_BRACE)){
+                vars = vars.closeBrace();
                 try {
                     while (!currNode.getValue().equals("{")) {
                         currNode = currNode.getParent();
@@ -476,14 +484,14 @@ class Node {
         } else if (value.matches("[0-9]+")) {
             code.append("\tpush ").append(value).append("\n\n");
         } else if (value.matches("[a-zA-Z_][a-zA-Z_0-9]*_var")) {
-            if (this.childrenCount > 0) {
-                int point = (declaratedVar.indexOf(value) + 1) * 4;
-                code.append("\tpop eax\n")
-                        .append("\tmov [ebp-").append(point).append("], eax   ;\n\n");
-            }
-        } else if (value.matches("[a-zA-Z_][a-zA-Z_0-9]*_val")) {
-            int point = (declaratedVar.indexOf(value.substring(0, value.length() - 1) + "r") + 1) * 4;
-            code.append("\tpush [ebp-").append(point).append("]     ;").append(value).append("\n\n");
+//            if (this.childrenCount > 0) {
+//                int point = (declaratedVar.indexOf(value) + 1) * 4;
+//                code.append("\tpop eax\n")
+//                        .append("\tmov [ebp-").append(point).append("], eax   ;\n\n");
+//            }
+//        } else if (value.matches("[a-zA-Z_][a-zA-Z_0-9]*_val")) {
+//            int point = (declaratedVar.indexOf(value.substring(0, value.length() - 1) + "r") + 1) * 4;
+//            code.append("\tpush [ebp-").append(point).append("]     ;").append(value).append("\n\n");
         }
     }
 
@@ -495,15 +503,16 @@ class Node {
 
 class Variables{
     //keys: a_var1 or b_var2
-    private static final Map<String, Boolean> varList = new HashMap<>();
+    private final Map<String, Boolean> varList = new HashMap<>();
+    private static final ArrayList<String> variables = new ArrayList<>();
     private Variables parrent;
-//    private final ArrayList<Variables> children = new ArrayList<>();
-    private final ArrayList<String> variables = new ArrayList<>();
+    private final ArrayList<Variables> children = new ArrayList<>();
 
     public boolean addVar(String var){
-        if(variables.contains(var)){
+        if(varList.containsKey(var)){
             return true;
         }
+        varList.put(var, false);
         variables.add(var);
         return false;
     }
@@ -535,7 +544,7 @@ class Variables{
 
     public Variables openBrace(){
         Variables child = new Variables();
-//        this.children.add(child);
+        this.children.add(child);
         child.parrent = this;
         return child;
     }
