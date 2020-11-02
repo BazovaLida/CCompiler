@@ -26,50 +26,23 @@ main PROC
 	push ebp
 	mov ebp, esp
 
+	push 1
+
+	push 1
+
+	pop EBX
+	neg EBX
+	push EBX
+
+	pop eax
+	mov [ebp-4], eax   ;
+
 	push 0
 
 	pop eax
-	mov [ebp-8], eax   ;
-
-	push 5
-
-	pop eax
 	mov [ebp-4], eax   ;
 
-	push 90
-
-	push [ebp-4]     ;value1_val
-
-	mov edx, 0
-	pop ECX
-	pop EAX
-	idiv ECX
-	push EAX
-
-	push [ebp-8]     ;b_val
-
-	pop ECX
-	pop EAX
-	cmp eax, 0   ; check if e1 is true
-	jne _clause2   ; e1 is not 0, so we need to evaluate clause 2
-	jmp _end
-	_clause2:
-		cmp ecx, 0 ; check if e2 is true
-		mov eax, 0
-		setne al
-
-	_end:
-		push eax
-
-	pop eax
-	mov [ebp-12], eax   ;
-
-	push [ebp-12]     ;j_val
-
-	pop eax
-	mov [ebp-4], eax   ;
-
-	push [ebp-8]     ;b_val
+	push [ebp-4]     ;a_val
 
 	pop eax ;here is the result
 	mov esp, ebp  ; restore ESP; now it points to old EBP

@@ -1,10 +1,6 @@
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.sql.DriverPropertyInfo;
-import java.util.ArrayList;
-import java.util.EnumSet;
-import java.util.Objects;
-import java.util.Scanner;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -31,7 +27,7 @@ class Compiler {
             currNextLine = scanner.nextLine();
 
             matcher = pattern.matcher(currNextLine);
-            System.out.println("\n\tFor \"" + currNextLine + "\"");
+            System.out.println("\n\tFor '" + currNextLine + "'");
             while (matcher.find()) {
                 currNext = currNextLine.substring(matcher.start(), matcher.end());
 
@@ -40,7 +36,7 @@ class Compiler {
 
                 error = tokens.setPair(currNext);
                 if (!error) {
-                    System.out.println("Error while lexing the program in the row \"" + currNextLine + "\"");
+                    System.out.println("Error while lexing the program in the row '" + currNextLine + "'");
                     return true; //stop program because of error in input file
                 }
             }
@@ -51,6 +47,7 @@ class Compiler {
     //------------------------------------------------------Parsing----------------------------------------------------
     EnumSet<TokenT> typeKeyword = EnumSet.of(TokenT.KEYWORD_FLOAT, TokenT.KEYWORD_INT);
     EnumSet<TokenT> binaryOp = EnumSet.of(TokenT.DIVISION, TokenT.MULTIPLICATION, TokenT.LOGICAL_AND);
+    Variables vars = new Variables();
 
     public Node startParsing() {
         if (!tokens.getFirstType().equals(TokenT.KEYWORD_INT) ||
@@ -61,12 +58,16 @@ class Compiler {
         if (!tokens.getNextType().equals(TokenT.OPEN_PARENTHESES) ||
                 !tokens.getNextType().equals(TokenT.CLOSE_PARENTHESES) ||
                 !tokens.getNextType().equals(TokenT.OPEN_BRACE)) return parseError("Invalid function syntax");
-
+        Variables mainVars = vars;
         Node newMain = parseVar(mainNode);
-        if (newMain == null || !newMain.equals(mainNode)) return null;
 
+        if (newMain == null || !newMain.equals(mainNode))
+            return null;
         if (!tokens.getNextType().equals(TokenT.CLOSE_BRACE))
             return parseError("Invalid the end of the function");
+        if(mainVars != vars)
+            return parseError("Parsing error! The '{}' not closed");
+
         return mainNode;
     }
 
@@ -88,12 +89,12 @@ class Compiler {
             }
 
             if (currTokenT.equals(TokenT.IDENTIFIER)) {
-                currNode = mainNode;
+                boolean contained = vars.addVar(tokens.currVal() + "_var");
                 if (hasType) {
-                    if (Node.declaratedVar.contains(tokens.currVal())) {
+                    if (contained) {
                         return parseError("The variable " + tokens.currVal() + " is declarated several times!");
-                    } else Node.declaratedVar.add(tokens.currVal() + "_var");
-                } else if (!Node.declaratedVar.contains(tokens.currVal() + "_var")) {
+                    }
+                } else if (!contained) {
                     return parseError("Variable " + tokens.currVal() + " initialized, but not declarated");
                 }
 
@@ -103,23 +104,28 @@ class Compiler {
 
                 currTokenT = tokens.getNextType();
                 if (currTokenT.equals(TokenT.SEMICOLONS)) {
-                    currTokenT = tokens.getNextType();
-                } else if (currTokenT.equals(TokenT.EQUALS)) {
-                    Node.initializedVar.add(currNode.getValue());
-                    Node statNode = parseStatement(currNode);
+                    currNode = currNode.getParent();
+                }
+                else if (currTokenT.equals(TokenT.EQUALS)) {
+                    vars.addVal(currNode.getValue());
+
+                    Node statNode = parseStatement(currNode, TokenT.SEMICOLONS);
                     if (statNode == null || !statNode.equals(currNode))
                         return parseError("Error while parsing statement");
-                    currTokenT = tokens.getNextType();
+
+                    currNode = currNode.getParent();
+
                 } else return parseError("Error occurred after variable " + tokens.currVal());
             } else if(hasType){
                 return parseError("Error while parsing! There is keyword and no variable after that");
-            } else if(hasType) {
-                return parseError("The body of the function is built wrong! There is no variable after type token.");
             } else if (currTokenT.equals(TokenT.KEYWORD_IF)){
-                Node childNode = new Node("if", 1);
+                Node childNode = new Node("if", 2);
                 currNode.addChild(childNode);
                 currNode = childNode;
-            }else if (currTokenT.equals(TokenT.KEYWORD_ELSE)){
+                if(!tokens.getNextType().equals(TokenT.OPEN_PARENTHESES))
+                    System.out.println("error: expected '(' after 'if'");
+                parseStatement(currNode, TokenT.CLOSE_PARENTHESES);
+            } else if (currTokenT.equals(TokenT.KEYWORD_ELSE)){
                 if(!currNode.getLastChild().getValue().equals("if"))
                     return parseError("Error! 'else' without a previous 'if'");
                 Node childNode = new Node("else", 1);
@@ -129,39 +135,44 @@ class Compiler {
                 Node childNode = new Node("{", 100);
                 currNode.addChild(childNode);
                 currNode = childNode;
-            } else if(currTokenT.equals(TokenT.CLOSE_BRACE)){
+            }
+            else if(currTokenT.equals(TokenT.CLOSE_BRACE)){
                 try {
                     while (!currNode.getValue().equals("{")) {
                         currNode = currNode.getParent();
                     }
                 } catch (NullPointerException e) {
-                    return parseError("Error while parsing \"{}\". There are \"}\", but no \"{\" before it!");
+                    return parseError("Error while parsing '{}'. There are '}', but no '{' before it!");
                 }
-                currNode = currNode.getParent();
-                Node childNode = new Node("{", 0);
+                Node childNode = new Node("}", 0);
                 currNode.addChild(childNode);
+                currNode = currNode.getParent();
+            }
+            currTokenT = tokens.getNextType();
+            if ((currNode.getValue().equals("if") || currNode.getValue().equals("else")) && currNode.hasMaxChildren()){
+                currNode = currNode.getParent();
             }
         }
 
         Node retNode = new Node("return", 2);
         mainNode.addChild(retNode);
-        Node newRet = parseStatement(retNode);
+        Node newRet = parseStatement(retNode, TokenT.SEMICOLONS);
         if (newRet == null || !newRet.equals(retNode))
-            return parseError("Error while parsing statement after \"return\"");
+            return parseError("Error while parsing statement after 'return'");
         return mainNode;
     }
 
-    private Node parseStatement(Node currNode) {
+    private Node parseStatement(Node currNode, TokenT stopStopT) {
         TokenT currTokenT = tokens.getNextType();
         Node basic = currNode;
 
-        while (!currTokenT.equals(TokenT.SEMICOLONS)) {
+        while (!currTokenT.equals(stopStopT)) {
             if (currTokenT.equals(TokenT.NEGATION)) {
                 if (currNode.getValue().equals("(") || currNode.equals(basic)) {
                     Node childNode = new Node("-", 1);
                     currNode.addChild(childNode);
                     currNode = childNode;
-                } else return parseError("Error while parsing \"-\": it is without ()");
+                } else return parseError("Error while parsing '-': unary operation is without ()");
             } else if (binaryOp.contains(currTokenT)) {
                 if (currTokenT.equals(TokenT.LOGICAL_AND)) {
                     while (currNode.hasMaxChildren() &&
@@ -173,11 +184,12 @@ class Compiler {
                 if (currNode.hasNextChild()) {
                     Node binaryNode = new Node(tokens.currVal(), 2);
                     Node child = currNode.removeChild();
-                    currNode = binaryNode.addChild(child);
+                    binaryNode.addChild(child);
                     currNode.addChild(binaryNode);
                     currNode = binaryNode;
                 } else return parseError("Invalid binary operation syntax");
-            } else if (currTokenT.equals(TokenT.OPEN_PARENTHESES)) {
+            }
+            else if (currTokenT.equals(TokenT.OPEN_PARENTHESES)) {
                 Node childNode = new Node("(", 1);
                 currNode.addChild(childNode);
                 currNode = childNode;
@@ -187,21 +199,22 @@ class Compiler {
                         currNode = currNode.getParent();
                     }
                 } catch (NullPointerException e) {
-                    return parseError("Error while parsing \"()\" There are \")\", but no \"(\" before it!");
+                    return parseError("Error while parsing '()' There are ')', but no '(' before it!");
                 }
                 if (currNode.hasMaxChildren()) {
                     Node parent = currNode.getParent();
                     parent.replaceChild(currNode, currNode.getChild());
                     currNode = parent;
                 }
-            } else {
+            }
+            else {
                 String val = parseValue(currTokenT);
                 if (Objects.nonNull(val)) {
                     Node childNode = new Node(val, 0);
-                    currNode = currNode.addChild(childNode);
+                    currNode.addChild(childNode);
                 } else return parseError("Error while parsing value");
             }
-            while (currNode.hasMaxChildren() && !currNode.getValue().equals("(")) {
+            while (currNode.hasMaxChildren() && !(currNode.getValue().equals("(") || currNode.getValue().equals("if"))) {
                 currNode = currNode.getParent();
             }
             currTokenT = tokens.getNextType();
@@ -220,7 +233,7 @@ class Compiler {
             String val = tokens.currVal().substring(1);
             val = Integer.toString(Integer.parseInt(val, 2));
             return val;
-        } else if (Node.initializedVar.contains(tokens.currVal() + "_var")) {
+        } else if (vars.contains(tokens.currVal() + "_var")) {
             return tokens.currVal() + "_val";
         }
         return null;
@@ -325,7 +338,7 @@ class Tokens {
         }
         tokens.add(index, curr);
         types.add(index, getType(curr));
-        System.out.println("   \"" + curr + "\" is " + types.get(index) + " type");
+        System.out.println("   '" + curr + "' is " + types.get(index) + " type");
         prev = curr;
         return types.get(index) != TokenT.UNKNOWN;
     }
@@ -369,8 +382,6 @@ class Node {
     private int index;
     private final int maxChildren;
     private int childrenCount;
-    public static ArrayList<String> declaratedVar = new ArrayList<>();
-    public static ArrayList<String> initializedVar = new ArrayList<>();
 
     public Node(String value, int maxChildren) {
         this.children = new ArrayList<>(1);
@@ -392,14 +403,10 @@ class Node {
         return this.parent;
     }
 
-    public Node addChild(Node ch) {
-        Node curr = this;
-        while (this.hasMaxChildren() && (value.equals("if") || value.equals("else")))
-            curr = this.parent;
-        ch.setParent(curr);
+    public void addChild(Node ch) {
+        ch.setParent(this);
         childrenCount++;
-        curr.children.add(ch);
-        return curr;
+        this.children.add(ch);
     }
 
     public Node getChild() {
@@ -463,9 +470,9 @@ class Node {
                     .append("\tpop ebp       ; restore old EBP; now ESP is where it was before prologue\n")
                     .append("\tret\n");
         } else if (value.matches("if")) {
-
+            code.append("if");
         } else if (value.matches("else")) {
-
+            code.append("else");
         } else if (value.matches("[0-9]+")) {
             code.append("\tpush ").append(value).append("\n\n");
         } else if (value.matches("[a-zA-Z_][a-zA-Z_0-9]*_var")) {
@@ -483,5 +490,61 @@ class Node {
     public Node getLastChild() {
         int index = this.children.size() - 1;
         return this.children.get(index);
+    }
+}
+
+class Variables{
+    //keys: a_var1 or b_var2
+    private static final Map<String, Boolean> varList = new HashMap<>();
+    private Variables parrent;
+//    private final ArrayList<Variables> children = new ArrayList<>();
+    private final ArrayList<String> variables = new ArrayList<>();
+
+    public boolean addVar(String var){
+        if(variables.contains(var)){
+            return true;
+        }
+        variables.add(var);
+        return false;
+    }
+
+    public boolean addVal(String var) {
+        Variables currVars = this;
+        try {
+            while (!currVars.varList.containsKey(var)) {
+                currVars = currVars.parrent;
+            }
+            currVars.varList.put(var, true);
+            return true;
+        } catch (NullPointerException e) {
+            return false;
+        }
+    }
+
+    public boolean getVal(String var){
+        Variables currVars = this;
+        try {
+            while (!currVars.varList.containsKey(var)) {
+                currVars = currVars.parrent;
+            }
+            return true;
+        } catch (NullPointerException e) {
+            return false;
+        }
+    }
+
+    public Variables openBrace(){
+        Variables child = new Variables();
+//        this.children.add(child);
+        child.parrent = this;
+        return child;
+    }
+
+    public Variables closeBrace(){
+        return this.parrent;
+    }
+
+    public boolean contains(String var) {
+        return varList.containsKey(var) && varList.get(var);
     }
 }

@@ -1,8 +1,18 @@
-int main(){ //C language
-    int value1;
-    int b = 0;
-    value1 = 5;
-    float j = 90/value1 && b;
-    value1 = j;
-    return b;
+int main() {
+    int a = 9;
+    int b = 90;
+    if(a){
+        int b = 0;
+        {
+            int b = 20;
+            {
+                int b = 30;
+            }
+        }
+        a = -1;
+    }
+    else{
+        a = 0;
+    }
+    return a;
 }
