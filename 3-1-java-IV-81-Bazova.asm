@@ -64,7 +64,42 @@ main PROC
 	pop [ebp-16]
 	push [ebp-4]     ;a_val
 
-	push 0
+	push [ebp-8]     ;b_val
+
+	push [ebp-12]     ;c_val
+
+	mov edx, 0
+	pop ECX
+	pop EAX
+	idiv ECX
+	push EAX
+
+	mov edx, 0
+	pop ECX
+	pop EAX
+	idiv ECX
+	push EAX
+
+	push [ebp-16]     ;k_val
+
+	pop EBX
+	neg EBX
+	push EBX
+
+	pop ECX
+	pop EAX
+	cmp eax, 0   ; check if e1 is true
+	jne _clause2   ; e1 is not 0, so we need to evaluate clause 2
+	jmp _end
+	_clause2:
+		cmp ecx, 0 ; check if e2 is true
+		mov eax, 0
+		setne al
+
+	_end:
+		push eax
+
+if	push 0
 
 	pop [ebp-20]
 	push 20
@@ -89,12 +124,12 @@ main PROC
 	pop [ebp-24]
 }
 {
-if	push 0
+else	push 0
 
 	pop [ebp-20]
 }
 {
-else	push [ebp-16]     ;k_val
+	push [ebp-16]     ;k_val
 
 	pop eax ;here is the result
 	mov esp, ebp  ; restore ESP; now it points to old EBP

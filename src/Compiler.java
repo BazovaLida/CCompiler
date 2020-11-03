@@ -110,9 +110,8 @@ class Compiler {
                 }
                 else if (currTokenT.equals(TokenT.EQUALS)) {
                     Node statNode = parseStatement(currNode, TokenT.SEMICOLONS);
-                    if (statNode == null || !statNode.equals(currNode)) {
+                    if (statNode == null || !statNode.equals(currNode))
                         return parseError("Error while parsing statement");
-                    }
 
                     if(!vars.addVal(currNode.getValue())){
                         return parseError("Error while parsing! Variable " + currNode.getValue() + " is not initialised!");
@@ -128,16 +127,26 @@ class Compiler {
                 Node childNode = new Node("if", 2);
                 currNode.addChild(childNode);
                 currNode = childNode;
+
                 if(!tokens.getNextType().equals(TokenT.OPEN_PARENTHESES))
                     System.out.println("error: expected '(' after 'if'");
-                parseStatement(currNode, TokenT.CLOSE_PARENTHESES);
+
+                Node ifNode = parseStatement(currNode, TokenT.CLOSE_PARENTHESES);
+
+                if (ifNode == null || !ifNode.equals(currNode))
+                    return parseError("Error while parsing statement");
+                currNode = currNode.getParent();
             }
             else if (currTokenT.equals(TokenT.KEYWORD_ELSE)){
-                if(!currNode.getLastChild().getValue().equals("if"))
-                    return parseError("Error! 'else' without a previous 'if'");
+                if(!((currNode.getTailChild(1).getValue().equals("{") &&
+                        currNode.getTailChild(1).getTailChild(1).getValue().equals("}") ||
+                        currNode.getTailChild(1).getValue().matches("[a-zA-Z_][a-zA-Z_0-9]*_var")) &&
+                        currNode.getTailChild(2).getValue().equals("if"))) {
+                    return parseError("Error! 'else' without a previous 'if' or inappropriate value between it!");
+                }
+
                 Node childNode = new Node("else", 1);
                 currNode.addChild(childNode);
-                currNode = childNode;
             }
             else if(currTokenT.equals(TokenT.OPEN_BRACE)){
                 vars = vars.openBrace();
@@ -147,21 +156,15 @@ class Compiler {
             }
             else if(currTokenT.equals(TokenT.CLOSE_BRACE)){
                 vars = vars.closeBrace();
-                try {
-                    while (!currNode.getValue().equals("{")) {
-                        currNode = currNode.getParent();
-                    }
-                } catch (NullPointerException e) {
+                if(!currNode.getValue().equals("{")){
                     return parseError("Error while parsing '{}'. There are '}', but no '{' before it!");
+
                 }
                 Node childNode = new Node("}", 0);
                 currNode.addChild(childNode);
                 currNode = currNode.getParent();
             }
             currTokenT = tokens.getNextType();
-            if ((currNode.getValue().equals("if") || currNode.getValue().equals("else")) && currNode.hasMaxChildren()){
-                currNode = currNode.getParent();
-            }
         }
 
         Node retNode = new Node("return", 2);
@@ -178,13 +181,14 @@ class Compiler {
         TokenT currTokenT = tokens.getNextType();
         Node basic = currNode;
 
-        while (!currTokenT.equals(stopStopT)) {
+        while (!currTokenT.equals(stopStopT) || currNode.getValue().equals("(")) {
             if (currTokenT.equals(TokenT.NEGATION)) {
                 if (currNode.getValue().equals("(") || currNode.equals(basic)) {
                     Node childNode = new Node("-", 1);
                     currNode.addChild(childNode);
                     currNode = childNode;
-                } else return parseError("Error while parsing '-': unary operation is without ()");
+                } else
+                    return parseError("Error while parsing '-': unary operation is without ()");
             } else if (binaryOp.contains(currTokenT)) {
                 if (currTokenT.equals(TokenT.LOGICAL_AND)) {
                     while (currNode.hasMaxChildren() &&
@@ -535,8 +539,8 @@ class Node {
         }
     }
 
-    public Node getLastChild() {
-        int index = this.children.size() - 1;
+    public Node getTailChild(int place) {
+        int index = this.children.size() - place;
         return this.children.get(index);
     }
 }

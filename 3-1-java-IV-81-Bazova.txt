@@ -4,7 +4,7 @@ int main() {
     int b = 90;
     int c = a / b;
     int k = a / b / c;
-    if(a){
+    if(a/(b/c) && (-k)){
         int b = 0;
         {
             int b = 20;
