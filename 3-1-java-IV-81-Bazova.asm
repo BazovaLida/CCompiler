@@ -28,25 +28,78 @@ main PROC
 
 	push 9
 
+	pop [ebp-4]
 	push 90
+
+	pop [ebp-8]
+	push [ebp-4]     ;a_val
+
+	push [ebp-8]     ;b_val
+
+	mov edx, 0
+	pop ECX
+	pop EAX
+	idiv ECX
+	push EAX
+
+	pop [ebp-12]
+	push [ebp-4]     ;a_val
+
+	push [ebp-8]     ;b_val
+
+	mov edx, 0
+	pop ECX
+	pop EAX
+	idiv ECX
+	push EAX
+
+	push [ebp-12]     ;c_val
+
+	mov edx, 0
+	pop ECX
+	pop EAX
+	idiv ECX
+	push EAX
+
+	pop [ebp-16]
+	push [ebp-4]     ;a_val
 
 	push 0
 
+	pop [ebp-20]
 	push 20
 
+	pop [ebp-24]
 	push 30
 
+	pop [ebp-28]
+}
+{
+}
+{
 	push 1
 
 	pop EBX
 	neg EBX
 	push EBX
 
+	pop [ebp-4]
+	push 10
+
+	pop [ebp-24]
+}
+{
 if	push 0
 
-else	pop eax ;here is the result
+	pop [ebp-20]
+}
+{
+else	push [ebp-16]     ;k_val
+
+	pop eax ;here is the result
 	mov esp, ebp  ; restore ESP; now it points to old EBP
 	pop ebp       ; restore old EBP; now ESP is where it was before prologue
 	ret
+main
 main ENDP
 END start

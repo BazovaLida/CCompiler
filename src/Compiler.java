@@ -45,8 +45,6 @@ class Compiler {
     }
 
     //------------------------------------------------------Parsing----------------------------------------------------
-    EnumSet<TokenT> typeKeyword = EnumSet.of(TokenT.KEYWORD_FLOAT, TokenT.KEYWORD_INT);
-    EnumSet<TokenT> binaryOp = EnumSet.of(TokenT.DIVISION, TokenT.MULTIPLICATION, TokenT.LOGICAL_AND);
     Variables vars = new Variables();
 
     public Node startParsing() {
@@ -77,6 +75,7 @@ class Compiler {
     }
 
     private Node parseVar(Node currNode) {
+        EnumSet<TokenT> typeKeyword = EnumSet.of(TokenT.KEYWORD_FLOAT, TokenT.KEYWORD_INT);
         Node mainNode = currNode;
         TokenT currTokenT = tokens.getNextType();
         boolean hasType;
@@ -89,18 +88,21 @@ class Compiler {
             }
 
             if (currTokenT.equals(TokenT.IDENTIFIER)) {
-                boolean contained = vars.addVar(tokens.currVal() + "_var");
+                boolean canBeDecl = vars.contains(tokens.currVal() + "_var");
+                boolean canBeInit = vars.totalContains(tokens.currVal() + "_var");
                 if (hasType) {
-                    if (contained) {
+                    if (canBeDecl) {
                         return parseError("The variable " + tokens.currVal() + " is declarated several times!");
                     }
-                } else if (contained) {
+                    vars.addVar(tokens.currVal() + "_var");
+                } else if (!canBeInit) {
                     return parseError("Variable " + tokens.currVal() + " initialized, but not declarated");
                 }
 
                 Node var = new Node(tokens.currVal() + "_var", 2);
                 currNode.addChild(var);
                 currNode = var;
+                currNode.setPoint(vars.getPoint(tokens.currVal() + "_var"));
 
                 currTokenT = tokens.getNextType();
                 if (currTokenT.equals(TokenT.SEMICOLONS)) {
@@ -171,6 +173,8 @@ class Compiler {
     }
 
     private Node parseStatement(Node currNode, TokenT stopStopT) {
+        EnumSet<TokenT> binaryOp = EnumSet.of(TokenT.DIVISION, TokenT.MULTIPLICATION, TokenT.LOGICAL_AND);
+
         TokenT currTokenT = tokens.getNextType();
         Node basic = currNode;
 
@@ -216,60 +220,75 @@ class Compiler {
                 }
             }
             else {
-                String val = parseValue(currTokenT);
-                if (Objects.nonNull(val)) {
-                    Node childNode = new Node(val, 0);
-                    currNode.addChild(childNode);
-                } else return parseError("Error while parsing value");
+                currNode = parseValue(currNode, currTokenT);
+                if(currNode == null) return null;
             }
-            while (currNode.hasMaxChildren() && !(currNode.getValue().equals("(") || currNode.getValue().equals("if"))) {
-                currNode = currNode.getParent();
+            try {
+                while (currNode.hasMaxChildren() && !(currNode.getValue().equals("(") || currNode.getValue().equals("if"))) {
+                    currNode = currNode.getParent();
+                }
+            } catch (NullPointerException e){
+                return parseError("Error while parsing after token " + tokens.currVal());
             }
             currTokenT = tokens.getNextType();
         }
         return currNode;
     }
 
-    private String parseValue(TokenT firstVal) {
-        if (firstVal.equals(TokenT.INT_CONSTANT)) {
+    private Node parseValue(Node currNode, TokenT currToken) {
+        int index = vars.getVal(tokens.currVal() + "_var");
+        Node childNode;
+        if (currToken.equals(TokenT.INT_CONSTANT)) {
             String val = tokens.currVal();
             if (!(tokens.getNextType().equals(TokenT.DOT) & tokens.getNextType().equals(TokenT.INT_CONSTANT))) {
                 tokens.indexMinus(2);
             }
-            return val;
-        } else if (firstVal.equals(TokenT.INT_BIN_CONSTANT)) {
+            childNode = new Node(val, 0);
+        } else if (currToken.equals(TokenT.INT_BIN_CONSTANT)) {
             String val = tokens.currVal().substring(1);
             val = Integer.toString(Integer.parseInt(val, 2));
-            return val;
-        } else if (vars.contains(tokens.currVal() + "_var")) {
-            return tokens.currVal() + "_val";
+            childNode = new Node(val, 0);
+        } else if (index != -1) {
+            String val =  tokens.currVal() + "_val";
+            childNode = new Node(val, 0);
+            childNode.setPoint(index);
         }
-        return null;
+        else return parseError("Error while parsing value " + tokens.currVal());
+
+        currNode.addChild(childNode);
+        return currNode;
     }
 
     //----------------------------------------------------Generation--------------------------------------------------
 
     public String generator(Node node) {
         StringBuilder code = new StringBuilder();
+        vars.addVar("");
         String funcName = node.getValue();
         code.append(".386\n")
                 .append(".model flat, stdcall\n")
                 .append("option casemap :none\n\n")
+
                 .append("include C:\\masm32\\include\\kernel32.inc\n")
                 .append("include C:\\masm32\\include\\user32.inc\n\n")
+
                 .append("includelib C:\\masm32\\lib\\kernel32.lib\n")
                 .append("includelib C:\\masm32\\lib\\user32.lib\n\n")
+
                 .append(funcName).append(" PROTO\n\n")
+
                 .append(".data\n")
                 .append("msg_title db \"Result\", 0\n")
                 .append("buffer db 128 dup(?)\n")
                 .append("format db \"%d\",0\n\n")
+
                 .append(".code\n")
                 .append("start:\n")
                 .append("\tinvoke ").append(funcName)
                 .append("\n\tinvoke wsprintf, addr buffer, addr format, eax\n")
                 .append("\tinvoke MessageBox, 0, addr buffer, addr msg_title, 0\n")
                 .append("\tinvoke ExitProcess, 0\n\n")
+
                 .append(funcName).append(" PROC\n")
                 .append("\tpush ebp\n")
                 .append("\tmov ebp, esp\n\n");
@@ -390,6 +409,7 @@ class Node {
     private int index;
     private final int maxChildren;
     private int childrenCount;
+    private int point;
 
     public Node(String value, int maxChildren) {
         this.children = new ArrayList<>(1);
@@ -443,8 +463,13 @@ class Node {
         newChild.setParent(this);
     }
 
+    public void setPoint(int val){
+        point = (val + 1) * 4;
+    }
+
     public void codeGenerate(StringBuilder code) {
         if (value.matches("&&")) {
+
             code.append("\tpop ECX\n")
                     .append("\tpop EAX\n")
                     .append("\tcmp eax, 0   ; check if e1 is true\n")
@@ -454,44 +479,59 @@ class Node {
                     .append("\t\tcmp ecx, 0 ; check if e2 is true\n")
                     .append("\t\tmov eax, 0\n")
                     .append("\t\tsetne al\n\n")
+
                     .append("\t_end:\n")
                     .append("\t\tpush eax\n\n");
-        } else if (value.matches("\\*")) {
+
+        }
+        else if (value.matches("\\*")) {
+
             code.append("\tmov edx, 0\n")
                     .append("\tpop ECX\n")
                     .append("\tpop EAX\n")
                     .append("\timul ECX\n")
                     .append("\tpush EAX\n\n");
-        } else if (value.matches("/")) {
+
+        }
+        else if (value.matches("/")) {
+
             code.append("\tmov edx, 0\n")
                     .append("\tpop ECX\n")
                     .append("\tpop EAX\n")
                     .append("\tidiv ECX\n")
                     .append("\tpush EAX\n\n");
-        } else if (value.matches("-")) {
+
+        }
+        else if (value.matches("-")) {
+
             code.append("\tpop EBX\n")
                     .append("\tneg EBX\n")
                     .append("\tpush EBX\n\n");
-        } else if (value.matches("return")) {
+
+        }
+        else if (value.matches("return")) {
             code.append("\tpop eax ;here is the result\n")
                     .append("\tmov esp, ebp  ; restore ESP; now it points to old EBP\n")
                     .append("\tpop ebp       ; restore old EBP; now ESP is where it was before prologue\n")
                     .append("\tret\n");
-        } else if (value.matches("if")) {
+        }
+        else if (value.matches("if")) {
             code.append("if");
         } else if (value.matches("else")) {
             code.append("else");
         } else if (value.matches("[0-9]+")) {
             code.append("\tpush ").append(value).append("\n\n");
-        } else if (value.matches("[a-zA-Z_][a-zA-Z_0-9]*_var")) {
-//            if (this.childrenCount > 0) {
-//                int point = (declaratedVar.indexOf(value) + 1) * 4;
-//                code.append("\tpop eax\n")
-//                        .append("\tmov [ebp-").append(point).append("], eax   ;\n\n");
-//            }
-//        } else if (value.matches("[a-zA-Z_][a-zA-Z_0-9]*_val")) {
-//            int point = (declaratedVar.indexOf(value.substring(0, value.length() - 1) + "r") + 1) * 4;
-//            code.append("\tpush [ebp-").append(point).append("]     ;").append(value).append("\n\n");
+        }
+        else if (value.matches("[a-zA-Z_][a-zA-Z_0-9]*_var")) {
+            if (this.childrenCount > 0) {
+                code.append("\tpop " + "[ebp-").append(point).append("]\n");
+            }
+        }
+        else if (value.matches("[a-zA-Z_][a-zA-Z_0-9]*_val")) {
+            code.append("\tpush [ebp-").append(point).append("]     ;").append(value).append("\n\n");
+        }
+        else {
+            code.append(value + "\n");
         }
     }
 
@@ -502,19 +542,31 @@ class Node {
 }
 
 class Variables{
-    //keys: a_var1 or b_var2
+
     private final Map<String, Boolean> varList = new HashMap<>();
     private static final ArrayList<String> variables = new ArrayList<>();
+
     private Variables parrent;
     private final ArrayList<Variables> children = new ArrayList<>();
 
-    public boolean addVar(String var){
-        if(varList.containsKey(var)){
-            return true;
+    public boolean contains(String var){
+        return varList.containsKey(var);
+    }
+
+    public boolean totalContains(String var){
+        return variables.contains(var);
+    }
+
+    public int getPoint(String var){
+        return variables.lastIndexOf(var);
+    }
+
+    public void addVar(String var){
+        for (String variable : variables) {
+            System.out.println(variable);
         }
         varList.put(var, false);
         variables.add(var);
-        return false;
     }
 
     public boolean addVal(String var) {
@@ -530,16 +582,17 @@ class Variables{
         }
     }
 
-    public boolean getVal(String var){
-        Variables currVars = this;
-        try {
-            while (!currVars.varList.containsKey(var)) {
-                currVars = currVars.parrent;
-            }
-            return true;
-        } catch (NullPointerException e) {
-            return false;
-        }
+    public int getVal(String var){
+//        Variables currVars = this;
+//        try {
+//            while (!currVars.varList.containsKey(var)) {
+//                currVars = currVars.parrent;
+//            }
+//            return currVars.varList.get(var);
+//        } catch (NullPointerException e) {
+//            return false;
+//        }
+        return variables.lastIndexOf(var);
     }
 
     public Variables openBrace(){
@@ -550,10 +603,11 @@ class Variables{
     }
 
     public Variables closeBrace(){
+        for (int i = 0; i < varList.size(); i++) {
+            variables.remove(variables.size() - 1);
+        }
         return this.parrent;
     }
-
-    public boolean contains(String var) {
-        return varList.containsKey(var) && varList.get(var);
-    }
 }
+
+//Області видимості перекривають доступ до змінних у різних частинах коду
