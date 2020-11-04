@@ -151,6 +151,9 @@ class Compiler {
             else if(currTokenT.equals(TokenT.OPEN_BRACE)){
                 vars = vars.openBrace();
                 Node childNode = new Node("{", 100);
+                if(currNode.getTailChild(1).getValue().equals("else")){
+                    childNode.switchAfterElse();
+                }
                 currNode.addChild(childNode);
                 currNode = childNode;
             }
@@ -414,6 +417,8 @@ class Node {
     private final int maxChildren;
     private int childrenCount;
     private int point;
+    private static int loopCount = 0;
+    private boolean afterElse = false;
 
     public Node(String value, int maxChildren) {
         this.children = new ArrayList<>(1);
@@ -468,7 +473,11 @@ class Node {
     }
 
     public void setPoint(int val){
-        point = (val + 1) * 4;
+        point = (val + 3) * 4;
+    }
+
+    public void switchAfterElse(){
+        afterElse = !afterElse;
     }
 
     public void codeGenerate(StringBuilder code) {
@@ -502,6 +511,7 @@ class Node {
             code.append("\tmov edx, 0\n")
                     .append("\tpop ECX\n")
                     .append("\tpop EAX\n")
+//                    .append("\tcbq\n")
                     .append("\tidiv ECX\n")
                     .append("\tpush EAX\n\n");
 
@@ -520,11 +530,19 @@ class Node {
                     .append("\tret\n");
         }
         else if (value.matches("if")) {
-            code.append("if");
+            loopCount += 2;
+            code.append("pop eax\t;if\n" +
+                    "cmp eax, 0\n" +
+                    "je _L" + loopCount + "\n\n");
+
         } else if (value.matches("else")) {
-            code.append("else");
-        } else if (value.matches("[0-9]+")) {
-            code.append("\tpush ").append(value).append("\n\n");
+            loopCount += 1;
+            code.append("jmp _L" + loopCount + "\n" +
+                    "_L" + (loopCount - 1) + ":\n");
+
+        }
+        else if (value.matches("[0-9]+")) {
+            code.append("\tpush ").append(value).append("\n");
         }
         else if (value.matches("[a-zA-Z_][a-zA-Z_0-9]*_var")) {
             if (this.childrenCount > 0) {
@@ -532,10 +550,10 @@ class Node {
             }
         }
         else if (value.matches("[a-zA-Z_][a-zA-Z_0-9]*_val")) {
-            code.append("\tpush [ebp-").append(point).append("]     ;").append(value).append("\n\n");
+            code.append("\tpush [ebp-").append(point).append("]     ;").append(value).append("\n");
         }
-        else {
-            code.append(value + "\n");
+        else if(afterElse && value.matches("\\{")) {
+            code.append("_L" +  loopCount + ":\n");
         }
     }
 
@@ -566,9 +584,9 @@ class Variables{
     }
 
     public void addVar(String var){
-        for (String variable : variables) {
-            System.out.println(variable);
-        }
+//        for (String variable : variables) {
+//            System.out.println(variable);
+//        }
         varList.put(var, false);
         variables.add(var);
     }

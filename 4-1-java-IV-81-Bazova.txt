@@ -1,10 +1,10 @@
 int main() {
     int a;
-    a = 9;
-    int b = 90;
+    a = 90;
+    int b = 10;
     int c = a / b;
-    int k = a / b / c;
-    if(a/(b/c) && (-k)){
+    int k = a / c;
+    if(-k && a){
         int b = 0;
         {
             int b = 20;

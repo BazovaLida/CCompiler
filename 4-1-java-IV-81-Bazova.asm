@@ -26,66 +26,34 @@ main PROC
 	push ebp
 	mov ebp, esp
 
-	push 9
-
-	pop [ebp-4]
 	push 90
-
-	pop [ebp-8]
-	push [ebp-4]     ;a_val
-
-	push [ebp-8]     ;b_val
-
-	mov edx, 0
-	pop ECX
-	pop EAX
-	idiv ECX
-	push EAX
-
 	pop [ebp-12]
-	push [ebp-4]     ;a_val
-
-	push [ebp-8]     ;b_val
-
-	mov edx, 0
-	pop ECX
-	pop EAX
-	idiv ECX
-	push EAX
-
-	push [ebp-12]     ;c_val
-
-	mov edx, 0
-	pop ECX
-	pop EAX
-	idiv ECX
-	push EAX
-
+	push 10
 	pop [ebp-16]
-	push [ebp-4]     ;a_val
-
-	push [ebp-8]     ;b_val
-
-	push [ebp-12]     ;c_val
-
+	push [ebp-12]     ;a_val
+	push [ebp-16]     ;b_val
 	mov edx, 0
 	pop ECX
 	pop EAX
 	idiv ECX
 	push EAX
 
+	pop [ebp-20]
+	push [ebp-12]     ;a_val
+	push [ebp-20]     ;c_val
 	mov edx, 0
 	pop ECX
 	pop EAX
 	idiv ECX
 	push EAX
 
-	push [ebp-16]     ;k_val
-
+	pop [ebp-24]
+	push [ebp-24]     ;k_val
 	pop EBX
 	neg EBX
 	push EBX
 
+	push [ebp-12]     ;a_val
 	pop ECX
 	pop EAX
 	cmp eax, 0   ; check if e1 is true
@@ -99,42 +67,33 @@ main PROC
 	_end:
 		push eax
 
-if	push 0
+pop eax	;if
+cmp eax, 0
+je _L2
 
-	pop [ebp-20]
-	push 20
-
-	pop [ebp-24]
-	push 30
-
+	push 0
 	pop [ebp-28]
-}
-{
-}
-{
+	push 20
+	pop [ebp-32]
+	push 30
+	pop [ebp-36]
 	push 1
-
 	pop EBX
 	neg EBX
 	push EBX
 
-	pop [ebp-4]
+	pop [ebp-12]
 	push 10
-
-	pop [ebp-24]
-}
-{
-else	push 0
-
-	pop [ebp-20]
-}
-{
-	push [ebp-16]     ;k_val
-
+	pop [ebp-32]
+jmp _L3
+_L2:
+	push 0
+	pop [ebp-28]
+_L3:
+	push [ebp-24]     ;k_val
 	pop eax ;here is the result
 	mov esp, ebp  ; restore ESP; now it points to old EBP
 	pop ebp       ; restore old EBP; now ESP is where it was before prologue
 	ret
-main
 main ENDP
 END start
