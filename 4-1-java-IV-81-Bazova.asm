@@ -32,21 +32,22 @@ main PROC
 	pop [ebp-16]
 	push [ebp-12]     ;a_val
 	push [ebp-16]     ;b_val
-	mov edx, 0
 	pop ECX
 	pop EAX
+	mov EBX, EAX
+	shr EBX, 31
+	cmp EBX, 0
+	je _D0
+	mov edx, 0ffffffffh
+	jmp _D1
+_D0:
+	mov edx, 0
+_D1:
 	idiv ECX
 	push EAX
 
 	pop [ebp-20]
-	push [ebp-12]     ;a_val
-	push [ebp-20]     ;c_val
-	mov edx, 0
-	pop ECX
-	pop EAX
-	idiv ECX
-	push EAX
-
+	push 3
 	pop [ebp-24]
 	push [ebp-24]     ;k_val
 	pop EBX
@@ -71,7 +72,35 @@ pop eax	;if
 cmp eax, 0
 je _L2
 
-	push 0
+	push [ebp-12]     ;a_val
+	push 7
+	mov edx, 0
+	pop ECX
+	pop EAX
+	imul ECX
+	push EAX
+
+	pop EBX
+	neg EBX
+	push EBX
+
+	push [ebp-20]     ;c_val
+	pop ECX
+	pop EAX
+	mov EBX, EAX
+	shr EBX, 31
+	cmp EBX, 0
+	je _D2
+	mov edx, 0ffffffffh
+	jmp _D3
+_D2:
+	mov edx, 0
+_D3:
+	idiv ECX
+	push EAX
+
+	pop [ebp-24]
+	push 30
 	pop [ebp-28]
 	push 20
 	pop [ebp-32]
@@ -88,7 +117,7 @@ je _L2
 jmp _L3
 _L2:
 	push 0
-	pop [ebp-28]
+	pop [ebp-24]
 _L3:
 	push [ebp-24]     ;k_val
 	pop eax ;here is the result

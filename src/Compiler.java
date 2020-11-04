@@ -419,6 +419,7 @@ class Node {
     private int point;
     private static int loopCount = 0;
     private boolean afterElse = false;
+    private static int divCount = 0;
 
     public Node(String value, int maxChildren) {
         this.children = new ArrayList<>(1);
@@ -508,13 +509,22 @@ class Node {
         }
         else if (value.matches("/")) {
 
-            code.append("\tmov edx, 0\n")
-                    .append("\tpop ECX\n")
+            code.append("\tpop ECX\n")
                     .append("\tpop EAX\n")
-//                    .append("\tcbq\n")
+                    .append("\tmov EBX, EAX\n")
+                    .append("\tshr EBX, 31\n")
+                    .append("\tcmp EBX, 0\n")
+
+                    .append("\tje _D" + divCount + "\n")
+                    .append("\tmov edx, 0ffffffffh\n")
+                    .append("\tjmp _D" + (divCount + 1) + "\n")
+                    .append("_D" + divCount + ":\n")
+                    .append("\tmov edx, 0\n")
+                    .append("_D" + (divCount + 1) + ":\n")
+
                     .append("\tidiv ECX\n")
                     .append("\tpush EAX\n\n");
-
+            divCount =+ 2;
         }
         else if (value.matches("-")) {
 
