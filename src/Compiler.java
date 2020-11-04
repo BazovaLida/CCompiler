@@ -138,10 +138,15 @@ class Compiler {
                 currNode = currNode.getParent();
             }
             else if (currTokenT.equals(TokenT.KEYWORD_ELSE)){
-                if(!((currNode.getTailChild(1).getValue().equals("{") &&
-                        currNode.getTailChild(1).getTailChild(1).getValue().equals("}") ||
-                        currNode.getTailChild(1).getValue().matches("[a-zA-Z_][a-zA-Z_0-9]*_var")) &&
-                        currNode.getTailChild(2).getValue().equals("if"))) {
+                try {
+                    if (!((currNode.getTailChild(1).getValue().equals("{") &&
+                            currNode.getTailChild(1).getTailChild(1).getValue().equals("}") ||
+                            currNode.getTailChild(1).getValue().matches("[a-zA-Z_][a-zA-Z_0-9]*_var")) &&
+                            currNode.getTailChild(2).getValue().equals("if"))) {
+                        return parseError("Error! 'else' without a previous 'if' or inappropriate value between it!");
+                    }
+
+                } catch (IndexOutOfBoundsException e){
                     return parseError("Error! 'else' without a previous 'if' or inappropriate value between it!");
                 }
 
@@ -151,8 +156,12 @@ class Compiler {
             else if(currTokenT.equals(TokenT.OPEN_BRACE)){
                 vars = vars.openBrace();
                 Node childNode = new Node("{", 100);
-                if(currNode.getTailChild(1).getValue().equals("else")){
-                    childNode.switchAfterElse();
+                try {
+                    if (currNode.getTailChild(1).getValue().equals("else")) {
+                        childNode.switchAfterElse();
+                    }
+                } catch (IndexOutOfBoundsException e){
+                    //ok
                 }
                 currNode.addChild(childNode);
                 currNode = childNode;
@@ -594,9 +603,6 @@ class Variables{
     }
 
     public void addVar(String var){
-//        for (String variable : variables) {
-//            System.out.println(variable);
-//        }
         varList.put(var, false);
         variables.add(var);
     }
@@ -615,15 +621,6 @@ class Variables{
     }
 
     public int getVal(String var){
-//        Variables currVars = this;
-//        try {
-//            while (!currVars.varList.containsKey(var)) {
-//                currVars = currVars.parrent;
-//            }
-//            return currVars.varList.get(var);
-//        } catch (NullPointerException e) {
-//            return false;
-//        }
         return variables.lastIndexOf(var);
     }
 
