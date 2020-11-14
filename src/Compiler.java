@@ -187,6 +187,7 @@ class Compiler {
         if(!tokens.getNextType().equals(TokenT.IDENTIFIER)){
             return parseError("Parsing error: parameter '" + currTokenT + "' is unexpected");
         }
+        vars.addVar(tokens.currVal() + "_var");
         Node paramNode = new Node(tokens.currVal() + "_var", 0);
         paramNode.setPoint(vars.getPoint(tokens.currVal() + "_var"));
         node.addChild(paramNode);
@@ -565,13 +566,15 @@ class Node {
         this.maxChildren = maxChildren;
     }
 
-    public boolean equals(Node node) {
+    public boolean equal(Node node) {
+        if(node.maxChildren == 0 && this.maxChildren == 0)
+            return  true;
         if(!this.value.equals(node.value))
             return false;
 
         try {
             for (int i = 0; i < children.size(); i++)
-                if (!children.get(i).equals(node.children.get(i)))
+                if (!children.get(i).equal(node.children.get(i)))
                     return false;
         }catch(IndexOutOfBoundsException e){
             return false;
@@ -792,30 +795,30 @@ class Functions{
     private boolean definition;
 
     public boolean add(String name, Node paramNode, Variables vars, boolean definition, boolean beforeMain) {
-        if ((defNames.contains(name) && definition) ||
-                declNames.contains(name) && !definition) {
-            return false;
-        }
         if (definition) {
-            if (declNames.contains(name)) {
+            if (defNames.contains(name))//                    declNames.contains(name) && !definition) {
+                return false;
+            else if (declNames.contains(name))
                 id = declNames.indexOf(name);
-            } else {
+            else {
                 count++;
                 id = count;
             }
             defNames.add(id, name);
         }
         else {
-            if (defNames.contains(name)) {
+            if(declNames.contains(name))
+                return false;
+            else if (defNames.contains(name))
                 id = defNames.indexOf(name);
-            } else {
+            else {
                 count++;
-                id = count;
+                id =  count;
             }
             declNames.add(id, name);
         }
         try{
-            if(!nodes.get(id).equals(paramNode))
+            if(!nodes.get(id).equal(paramNode))
                 return false;
         } catch (IndexOutOfBoundsException e){
             nodes.add(id, paramNode);
