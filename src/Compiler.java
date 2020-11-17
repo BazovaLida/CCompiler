@@ -14,6 +14,7 @@ class Compiler {
 
     //-------------------------------------------------------Lexing----------------------------------------------------
     public boolean startLexing() {
+        System.out.println("---------Lexing started---------");
         boolean error;
         String currNextLine;
         String currNext;
@@ -45,158 +46,186 @@ class Compiler {
     }
 
     //------------------------------------------------------Parsing----------------------------------------------------
-    private ArrayList<Functions> funcArr;
+    private Functions functions = new Functions();
     public Node startParsing() {
-        ArrayList<Functions> functions = new ArrayList<>();
-        funcArr = functions;
+        System.out.println("---------Parsing started---------");
+        Variables vars = new Variables();
         Node node = new Node("", Integer.MAX_VALUE);
         TokenT currToken = tokens.getFirstType();
-        // -------------------------------------------------------------
-        Node finalNode = parseFunction(node, false, functions, currToken);
-        if (finalNode == null || !(finalNode == node)) {
+
+        Node finalNode = parseFunction(node,  currToken, vars);
+        if (finalNode == null || !(finalNode == node))
             return null;
-        }else return node;
+        String errorFunc = functions.finalCheck();
+        if(errorFunc != null)
+            return parseError("Parsing error: function '" + errorFunc + "' called, but undefined!");
+        if(!functions.containsMain())
+            return parseError("Parsing error: there is no main function in the program!");
+        return node;
     }
 
-    private Node parseFunction(Node node, boolean mainFound, ArrayList<Functions> functions, TokenT currTokenT){
+    private Node parseFunction(Node node, TokenT currTokenT, Variables variables){
+        String name;
+        Variables currVars = variables.openBrace();
         //check if code have next function
-            if (!currTokenT.equals(TokenT.KEYWORD_INT))
-                return parseError("Parsing error! Invalid type of function");
-
-
-        currTokenT = tokens.getNextType();
-        //if current function is the main
-        if(currTokenT.equals(TokenT.KEYWORD_MAIN)) {
-            if (!(tokens.getNextType().equals(TokenT.OPEN_PARENTHESES) &&
-                    tokens.getNextType().equals(TokenT.CLOSE_PARENTHESES))){
-                return parseError("Parsing error: '()' expected after the name of the 'main' function");
-            }
-            //syntax checking
+        if (currTokenT.equals(TokenT.KEYWORD_INT)) {
             currTokenT = tokens.getNextType();
-            if((!currTokenT.equals(TokenT.SEMICOLONS) && mainFound)) {
-                return parseError("Invalid function syntax of the main function");
-            } else if(!currTokenT.equals(TokenT.OPEN_BRACE)) {
-                return parseError("Invalid 'main' function declaration");
-            }
 
-            //body of main function
-            mainFound = true;
-            Node mainFunc = new Node("main_func", 2);
-            node.addChild(mainFunc);
-            Node main = new Node("main_name", 0);
-            mainFunc.addChild(main);
-            Node mainBody = new Node("main_body", Integer.MAX_VALUE);
-            mainFunc.addChild(mainBody);
-            Variables vars = new Variables();
-
-            Functions funsction = new Functions();
-            if(!funsction.add("main", mainFunc, vars, false, false))
-                return parseError("Parsing error: invalid function consistency.");
-            functions.add(funsction);
-
-            Node withBody = parseFuncBody(mainBody, vars);
-            if (withBody == null || !withBody.equals(mainBody))
-                return null;
-            try {
-                while (!tokens.getNextType().equals(TokenT.CLOSE_BRACE)){}
-            } catch (IndexOutOfBoundsException e){
-                return parseError("Invalid the end of the main function");
-            }
-
-            try {
-                return parseFunction(node, mainFound, functions, tokens.getNextType());
-            } catch (IndexOutOfBoundsException e) {
-                //the end of recursion (without exceptions)
-                return node;
-            }
-        }
-
-        //not main function
-        else if(!currTokenT.equals((TokenT.IDENTIFIER))){
-            return parseError("Parsing error: invalid name of the function");
-        }
-        Variables currVars = new Variables();
-        String name = tokens.currVal();
-        Functions funsction = new Functions();
-        Node FuncName = new Node(name + "_name", 0);
-
-        if (!tokens.getNextType().equals(TokenT.OPEN_PARENTHESES)){
-            return parseError("Parsing error: expected '(' after the name of the function");
-        }
-        Node paramNode = new Node(name + "_param", 10);
-        Node withParam = parseFuncParam(paramNode, currVars);
-        if (withParam == null || withParam != paramNode) {
-            return null;
-        }
-
-        currTokenT = tokens.getNextType();
-        if(currTokenT.equals(TokenT.SEMICOLONS))
-        {
-            //function declaration
-            Node currFunc = new Node(name +"_func", 2);
-            node.addChild(currFunc);
-            currFunc.addChild(FuncName);
-            currFunc.addChild(paramNode);
-            if(!funsction.add(name, currFunc, currVars, true, !mainFound)) {
-                return parseError("Parsing error: invalid function consistency.");
-            }
-            functions.add(funsction);
-        } else if(currTokenT.equals(TokenT.OPEN_BRACE)) {
-            //function definition
-            Node currFunc = new Node(name + "_func", 3);
-            node.addChild(currFunc);
-            currFunc.addChild(FuncName);
-            currFunc.addChild(paramNode);
-
-            if (!funsction.add(name, currFunc, currVars, false, !mainFound)) {
-                return parseError("Parsing error: invalid function consistency.");
-            }
-            functions.add(funsction);
-
-            Node funcBody = new Node(name + "_body", Integer.MAX_VALUE);
-            currFunc.addChild(funcBody);
-
-            Node withBody = parseFuncBody(funcBody, currVars);
-            if (withBody == null || !withBody.equals(funcBody))
-                return null;
-            try {
-                while (!tokens.getNextType().equals(TokenT.CLOSE_BRACE)) {
+            //if current function is the main
+            if (currTokenT.equals(TokenT.KEYWORD_MAIN)) {
+                //syntax checking
+                if (tokens.getNextType().equals(TokenT.OPEN_PARENTHESES) &&
+                        tokens.getNextType().equals(TokenT.CLOSE_PARENTHESES)) {//  '()'
+                    currTokenT = tokens.getNextType();
+                    if (currTokenT.equals(TokenT.SEMICOLONS) ) {// ';'
+                        Variables prevVars = currVars.skipCurBrace(0);
+                        if (tokens.hasNext()) {
+                            return parseFunction(node, tokens.getNextType(), prevVars);
+                        } else return node;
+                    }
+                    else if (!currTokenT.equals(TokenT.OPEN_BRACE)) {// ':'
+                        return parseError("Invalid 'main' function declaration");
+                    }
                 }
-            } catch (IndexOutOfBoundsException e) {
-                return parseError("Invalid the end of the '" + name + "' function");
+                else return parseError("Parsing error: '()' expected after the name of the 'main' function");
+
+                //body of main function
+                name = "main";
+                Node mainFunc = new Node("main_func", 2);
+                node.addChild(mainFunc);
+                Node main = new Node("main_name", 0);
+                mainFunc.addChild(main);
+                Node mainBody = new Node("main_body", Integer.MAX_VALUE);
+                mainFunc.addChild(mainBody);
+
+                boolean containsCheck =  functions.foundFunc(name, 0);
+                boolean noSuchBodyCheck = functions.functionBody(name, 0);
+                if(!(containsCheck && noSuchBodyCheck))
+                    return parseError("Parsing error: There are 2 main functions");
+
+                Node withBody = parseFuncBody(mainBody, currVars);
+                if (withBody == null || !withBody.equals(mainBody))
+                    return null;
             }
+
+            //not main function
+            else if (currTokenT.equals((TokenT.IDENTIFIER))) {
+                name = tokens.currVal();
+                if (tokens.getNextType().equals(TokenT.OPEN_PARENTHESES)) {
+                    Node FuncName = new Node(name + "_name", 0);
+                    Node paramNode = new Node(name + "_param", 10);
+                    Node withParam = parseFuncParam(paramNode, currVars);
+                    if (withParam == null || withParam != paramNode)
+                        return null;
+
+                    int paramCount = withParam.getChildrenCount();
+                    boolean containsCheck =  functions.foundFunc(name, paramCount);
+
+                    currTokenT = tokens.getNextType();
+                    if (currTokenT.equals(TokenT.SEMICOLONS)) {
+                        //function declaration
+                        Node currFunc = new Node(name + "_func", 2);
+                        node.addChild(currFunc);
+                        currFunc.addChild(FuncName);
+                        currFunc.addChild(paramNode);
+                        Variables prevVars = currVars.skipCurBrace(paramCount);
+                        return safeRecursion(node, prevVars);
+                    }
+                    else if (currTokenT.equals(TokenT.OPEN_BRACE)) {
+                        //function definition
+                        Node currFunc = new Node(name + "_func", 3);
+                        node.addChild(currFunc);
+                        currFunc.addChild(FuncName);
+                        currFunc.addChild(paramNode);
+                        Node funcBody = new Node(name + "_body", Integer.MAX_VALUE);
+                        currFunc.addChild(funcBody);
+
+                        boolean noSuchBodyCheck = functions.functionBody(name, paramCount);
+                        if(!noSuchBodyCheck)
+                            return parseError("Parsing error: There are 2 '" + name + "' functions");
+                        if(!containsCheck)
+                            return parseError("Parsing error: Function '" + name  + "' has different list of parameters");
+
+                        Node withBody = parseFuncBody(funcBody, currVars);
+                        if (withBody == null || !withBody.equals(funcBody))
+                            return null;
+                    }
+                    else return parseError("Parsing error: invalid syntax after parameters of the '" + name + "' function");
+                } else return parseError("Parsing error: expected '(' after the name of the function");
+            }
+            else return parseError("Parsing error: invalid name of the function");
         }
-        try {
-            return parseFunction(node, mainFound, functions, tokens.getNextType());
-        } catch (IndexOutOfBoundsException e) {
-            if (functions.isEmpty())
-                return parseError("Parsing error: no functions found");
-            //the end of recursion (without exceptions)
-            return node;
+        else return parseError("Parsing error! Invalid type of function");
+
+
+        boolean finalBrace = false;
+        while (tokens.hasNext())
+            if(tokens.getNextType().equals(TokenT.CLOSE_BRACE)){
+                finalBrace = true;
+                break;
+            }
+        if(!finalBrace)
+            return parseError("Invalid the end of the " + name + " function");
+        else return safeRecursion(node, currVars);
+    }
+
+    private Node safeRecursion(Node node, Variables variables){
+        if(tokens.hasNext()){
+            return parseFunction(node, tokens.getNextType(), variables);
         }
+        //the end of recursion (without exceptions)
+        else return node;
     }
 
     private Node parseFuncParam(Node node, Variables vars){
         TokenT currTokenT = tokens.getNextType();
-        if(currTokenT.equals(TokenT.CLOSE_PARENTHESES)){
-            return node;
+        while (!currTokenT.equals(TokenT.CLOSE_PARENTHESES)){
+            if(!Tokens.typeKeyword.contains(currTokenT)){
+                return parseError("Parsing error: type '" + currTokenT + "' is undefined");
+            }
+            if(!tokens.getNextType().equals(TokenT.IDENTIFIER)){
+                return parseError("Parsing error: parameter '" + currTokenT + "' is unexpected");
+            }
+            vars.addVar(tokens.currVal() + "_var");
+            Node paramNode = new Node(tokens.currVal() + "_var", 0);
+            paramNode.setPoint(vars.getPoint(tokens.currVal() + "_var"));
+            node.addChild(paramNode);
+
+            currTokenT = tokens.getNextType();
+            if(currTokenT.equals(TokenT.COMMA)) {
+                currTokenT = tokens.getNextType();
+                continue;
+            }else if(!currTokenT.equals(TokenT.CLOSE_PARENTHESES))
+                return parseError("Parsing error: type of '" + currTokenT + "' is undefined");
         }
-        else if(!Tokens.typeKeyword.contains(currTokenT)){
-            return parseError("Parsing error: type of '" + currTokenT + "' is undefined");
-        }
-        if(!tokens.getNextType().equals(TokenT.IDENTIFIER)){
-            return parseError("Parsing error: parameter '" + currTokenT + "' is unexpected");
-        }
-        vars.addVar(tokens.currVal() + "_var");
-        Node paramNode = new Node(tokens.currVal() + "_var", 0);
-        paramNode.setPoint(vars.getPoint(tokens.currVal() + "_var"));
-        node.addChild(paramNode);
-        return parseFuncParam(node, vars);
+        return node;
+
     }
 
     private Node parseError(String msg) {
         System.out.println(msg);
         return null;
+    }
+
+    private Node callFunction(String name, Node currNode, Variables vars){
+        Node callNode = new Node(name + "_call", 10);
+        currNode.addChild(callNode);
+        TokenT currTokenT = tokens.getNextType();
+        int argumentsCount = 0;
+        try {
+            while (!currTokenT.equals(TokenT.CLOSE_PARENTHESES)) {
+                argumentsCount ++;
+                Node pargNode = parseStatement(callNode, TokenT.COMMA, vars, currTokenT);
+                if (pargNode == null || !pargNode.equals(callNode))
+                    return parseError("Error while parsing function argument");
+                currTokenT = tokens.getNextType();
+            }
+        }catch (NullPointerException e){
+            return parseError("Parsing error: there is wrong arguments syntax while calling '" + name + "' function");
+        }
+        if(!functions.activateFunction(name, argumentsCount))
+            return parseError("Parsing error: '"+ name + "' with " + argumentsCount + " parameters was not declared!");
+        return currNode;
     }
 
     private Node parseFuncBody(Node currNode, Variables vars) {
@@ -212,37 +241,47 @@ class Compiler {
             }
 
             if (currTokenT.equals(TokenT.IDENTIFIER)) {
-                boolean canBeDecl = vars.contains(tokens.currVal() + "_var");
-                boolean canBeInit = vars.totalContains(tokens.currVal() + "_var");
-                if (hasType) {
-                    if (canBeDecl) {
-                        return parseError("The variable " + tokens.currVal() + " is declarated several times!");
-                    }
-                    vars.addVar(tokens.currVal() + "_var");
-                } else if (!canBeInit) {
-                    return parseError("Variable " + tokens.currVal() + " initialized, but not declarated");
-                }
-
-                Node var = new Node(tokens.currVal() + "_var", 2);
-                currNode.addChild(var);
-                currNode = var;
-                currNode.setPoint(vars.getPoint(tokens.currVal() + "_var"));
-
+                String name = tokens.currVal();
                 currTokenT = tokens.getNextType();
-                if (currTokenT.equals(TokenT.SEMICOLONS)) {
-                    currNode = currNode.getParent();
-                }
-                else if (currTokenT.equals(TokenT.EQUALS)) {
-                    Node statNode = parseStatement(currNode, TokenT.SEMICOLONS, vars);
-                    if (statNode == null || !statNode.equals(currNode))
-                        return parseError("Error while parsing statement");
+                if (currTokenT.equals(TokenT.OPEN_PARENTHESES)) {
+                    if(hasType)
+                        return parseError("Parsing error: there is an identifier before function call!");
 
-                    if(!vars.addVal(currNode.getValue())){
-                        return parseError("Error while parsing! Variable " + currNode.getValue() + " is not initialised!");
+                    Node callNode = callFunction(name, currNode, vars);
+                    if (callNode == null || !callNode.equals(currNode))
+                        return null;
+                    if(!tokens.getNextType().equals(TokenT.SEMICOLONS))
+                        return parseError("Error after parsing call of '" + name + "' function");
+                } else {
+                    boolean canBeDecl = vars.contains(name + "_var");
+                    boolean canBeInit = vars.totalContains(name + "_var");
+                    if (hasType) {
+                        if (canBeDecl) {
+                            return parseError("The variable " + name + " is declarated several times!");
+                        }
+                        vars.addVar(name + "_var");
+                    } else if (!canBeInit) {
+                        return parseError("Variable " + name + " initialized, but not declarated");
                     }
-                    currNode = currNode.getParent();
+
+                    Node var = new Node( name + "_var", 2);
+                    currNode.addChild(var);
+                    currNode = var;
+                    currNode.setPoint(vars.getPoint(name + "_var"));
+
+                    if (currTokenT.equals(TokenT.SEMICOLONS)) {
+                        currNode = currNode.getParent();
+                    } else if (currTokenT.equals(TokenT.EQUALS)) {
+                        Node statNode = parseStatement(currNode, TokenT.SEMICOLONS, vars, tokens.getNextType());
+                        if (statNode == null || !statNode.equals(currNode))
+                            return parseError("Error while parsing statement");
+
+                        if (!vars.addVal(currNode.getValue())) {
+                            return parseError("Error while parsing! Variable " + currNode.getValue() + " is not initialised!");
+                        }
+                        currNode = currNode.getParent();
+                    } else return parseError("Error occurred after variable " + name);
                 }
-                else return parseError("Error occurred after variable " + tokens.currVal());
             }
             else if(hasType){
                 return parseError("Error while parsing! There is keyword and no variable after that");
@@ -255,7 +294,7 @@ class Compiler {
                 if(!tokens.getNextType().equals(TokenT.OPEN_PARENTHESES))
                     System.out.println("error: expected '(' after 'if'");
 
-                Node ifNode = parseStatement(currNode, TokenT.CLOSE_PARENTHESES, vars);
+                Node ifNode = parseStatement(currNode, TokenT.CLOSE_PARENTHESES, vars, tokens.getNextType());
 
                 if (ifNode == null || !ifNode.equals(currNode))
                     return parseError("Error while parsing statement");
@@ -305,16 +344,14 @@ class Compiler {
 
         Node retNode = new Node("return", 2);
         mainNode.addChild(retNode);
-        Node newRet = parseStatement(retNode, TokenT.SEMICOLONS, vars);
+        Node newRet = parseStatement(retNode, TokenT.SEMICOLONS, vars, tokens.getNextType());
         if (newRet == null || !newRet.equals(retNode))
             return parseError("Error while parsing statement after 'return'");
         return mainNode;
     }
 
-    private Node parseStatement(Node currNode, TokenT stopStopT, Variables vars) {
+    private Node parseStatement(Node currNode, TokenT stopStopT, Variables vars, TokenT currTokenT) {
         EnumSet<TokenT> binaryOp = EnumSet.of(TokenT.DIVISION, TokenT.MULTIPLICATION, TokenT.LOGICAL_AND);
-
-        TokenT currTokenT = tokens.getNextType();
         Node basic = currNode;
 
         while (!currTokenT.equals(stopStopT) || currNode.getValue().equals("(")) {
@@ -325,7 +362,8 @@ class Compiler {
                     currNode = childNode;
                 } else
                     return parseError("Error while parsing '-': unary operation is without ()");
-            } else if (binaryOp.contains(currTokenT)) {
+            }
+            else if (binaryOp.contains(currTokenT)) {
                 if (currTokenT.equals(TokenT.LOGICAL_AND)) {
                     while (currNode.hasMaxChildren() &&
                             !currNode.getValue().equals("(") && !currNode.equals(basic)) {
@@ -345,13 +383,18 @@ class Compiler {
                 Node childNode = new Node("(", 1);
                 currNode.addChild(childNode);
                 currNode = childNode;
-            } else if (currTokenT.equals(TokenT.CLOSE_PARENTHESES)) {
+            }
+            else if (currTokenT.equals(TokenT.CLOSE_PARENTHESES)) {
                 try {
                     while (!currNode.getValue().equals("(")) {
                         currNode = currNode.getParent();
                     }
                 } catch (NullPointerException e) {
-                    return parseError("Error while parsing '()' There are ')', but no '(' before it!");
+                    if(stopStopT.equals(TokenT.COMMA)) {
+                        tokens.indexMinus(1);
+                        return basic;
+                    }
+                    else return parseError("Error while parsing '()' There are ')', but no '(' before it!");
                 }
                 if (currNode.hasMaxChildren()) {
                     Node parent = currNode.getParent();
@@ -376,7 +419,8 @@ class Compiler {
     }
 
     private Node parseValue(Node currNode, TokenT currToken, Variables vars) {
-        int index = vars.getVal(tokens.currVal() + "_var");
+        String name = tokens.currVal();
+        int index = vars.getVal( name + "_var");
         Node childNode;
         if (currToken.equals(TokenT.INT_CONSTANT)) {
             String val = tokens.currVal();
@@ -384,24 +428,31 @@ class Compiler {
                 tokens.indexMinus(2);
             }
             childNode = new Node(val, 0);
+            currNode.addChild(childNode);
         } else if (currToken.equals(TokenT.INT_BIN_CONSTANT)) {
             String val = tokens.currVal().substring(1);
             val = Integer.toString(Integer.parseInt(val, 2));
             childNode = new Node(val, 0);
+            currNode.addChild(childNode);
         } else if (index != -1) {
             String val =  tokens.currVal() + "_val";
             childNode = new Node(val, 0);
             childNode.setPoint(index);
+            currNode.addChild(childNode);
+        } else if(functions.containsFunc(name) && tokens.getNextType().equals(TokenT.OPEN_PARENTHESES)){
+            Node callNode = callFunction(name, currNode, vars);
+            if (callNode == null || !callNode.equals(currNode))
+                return null;
         }
         else return parseError("Error while parsing value " + tokens.currVal());
 
-        currNode.addChild(childNode);
         return currNode;
     }
 
     //----------------------------------------------------Generation--------------------------------------------------
 
     public String generator(Node node) {
+        System.out.println("---------Generation started---------");
         StringBuilder code = new StringBuilder();
         String funcName = node.getValue();
         code.append(".386\n")
@@ -541,8 +592,12 @@ class Tokens {
         return tokens.get(index);
     }
 
-    public int currIndex() {
-        return index;
+//    public int currIndex() {
+//        return index;
+//    }
+
+    public boolean hasNext(){
+        return types.size() > index + 1;
     }
 }
 
@@ -564,6 +619,10 @@ class Node {
         this.childrenCount = 0;
         this.value = value;
         this.maxChildren = maxChildren;
+    }
+
+    public int getChildrenCount(){
+        return childrenCount;
     }
 
     public boolean equal(Node node) {
@@ -766,13 +825,24 @@ class Variables{
 
     public int getVal(String var){
         return variables.lastIndexOf(var);
-    }
+     }
 
     public Variables openBrace(){
         Variables child = new Variables();
         this.children.add(child);
         child.parrent = this;
         return child;
+    }
+
+    public Variables skipCurBrace(int count){
+        int varIndex = variables.size() - 1;
+        for (int i = 0; i < count; i++) {
+            variables.remove(varIndex);
+            varIndex --;
+        }
+        int index = this.parrent.children.size() - 1;
+        this.parrent.children.remove(index);
+        return this.parrent;
     }
 
     public Variables closeBrace(){
@@ -784,49 +854,91 @@ class Variables{
 }
 
 class Functions{
-    private static final ArrayList<String> defNames = new ArrayList<>();
-    private static final ArrayList<String> declNames = new ArrayList<>();
-    private static int count = -1;
-    private int id;
-    private static final ArrayList<Node> nodes = new ArrayList<>();
-    private String name;
-    private Variables variables;
-    private boolean beforeMain;
-    private boolean definition;
+    private final Map<String, Integer> allFunc = new HashMap<>();
+    private final ArrayList<String> defNames = new ArrayList<>();//has a body
+    private final ArrayList<String> activatedFunc = new ArrayList<>();//has a body
 
-    public boolean add(String name, Node paramNode, Variables vars, boolean definition, boolean beforeMain) {
-        if (definition) {
-            if (defNames.contains(name))//                    declNames.contains(name) && !definition) {
-                return false;
-            else if (declNames.contains(name))
-                id = declNames.indexOf(name);
-            else {
-                count++;
-                id = count;
-            }
-            defNames.add(id, name);
+    public boolean foundFunc(String name, int arguments){
+        if(allFunc.containsKey(name)){
+            return allFunc.get(name) == arguments;
         }
         else {
-            if(declNames.contains(name))
-                return false;
-            else if (defNames.contains(name))
-                id = defNames.indexOf(name);
-            else {
-                count++;
-                id =  count;
-            }
-            declNames.add(id, name);
+            allFunc.put(name, arguments);
+            return true;
         }
-        try{
-            if(!nodes.get(id).equal(paramNode))
-                return false;
-        } catch (IndexOutOfBoundsException e){
-            nodes.add(id, paramNode);
-        }
-        this.name = name;
-        this.definition = definition;
-        this.beforeMain = beforeMain;
-        this.variables = vars;
+    }
+
+    public boolean functionBody(String name, int arguments){
+        if(defNames.contains(name))
+            return false;
+        else
+            return defNames.add(name);
+    }
+
+    public boolean containsFunc(String name){
+        return allFunc.containsKey(name);
+    }
+
+    public boolean activateFunction(String name, int arguments){
+        activatedFunc.add(name);
+        return allFunc.containsKey(name) && allFunc.get(name) == arguments;
+    }
+
+    public boolean containsMain() {
+        if (!defNames.contains("main"))
+            return false;
         return true;
     }
+
+    public String finalCheck() {
+        for (String currName : activatedFunc) {
+            if (!defNames.contains(currName)) {
+                return currName;
+            }
+        }
+        return null;
+    }
 }
+//    private static int count = -1;
+//    private int id;
+//    private String name;
+//    private Variables variables;
+//    private boolean beforeMain;
+//    private boolean definition;
+//
+//    public boolean add(String name, Node paramNode, Variables vars, boolean definition, boolean beforeMain) {
+//        if (definition) {
+//            if (defNames.contains(name))//                    declNames.contains(name) && !definition) {
+//                return false;
+//            else if (declNames.contains(name))
+//                id = declNames.indexOf(name);
+//            else {
+//                count++;
+//                id = count;
+//            }
+//            defNames.add(id, name);
+//        }
+//        else {
+//            if(declNames.contains(name))
+//                return false;
+//            else if (defNames.contains(name))
+//                id = defNames.indexOf(name);
+//            else {
+//                count++;
+//                id =  count;
+//            }
+//            declNames.add(id, name);
+//        }
+//        try{
+//            if(!nodes.get(id).equal(paramNode))
+//                return false;
+//        } catch (IndexOutOfBoundsException e){
+//            nodes.add(id, paramNode);
+//        }
+//        this.name = name;
+//        this.definition = definition;
+//        this.beforeMain = beforeMain;
+//        this.variables = vars;
+//        return true;
+//    }
+//}
