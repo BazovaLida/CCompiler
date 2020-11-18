@@ -67,23 +67,25 @@ class Compiler {
     private Node parseFunction(Node node, TokenT currTokenT, Variables variables){
         String name;
         Variables currVars = variables.openBrace();
+        Variables prevVars;
         //check if code have next function
         if (currTokenT.equals(TokenT.KEYWORD_INT)) {
             currTokenT = tokens.getNextType();
 
             //if current function is the main
             if (currTokenT.equals(TokenT.KEYWORD_MAIN)) {
+
                 //syntax checking
                 if (tokens.getNextType().equals(TokenT.OPEN_PARENTHESES) &&
                         tokens.getNextType().equals(TokenT.CLOSE_PARENTHESES)) {//  '()'
                     currTokenT = tokens.getNextType();
                     if (currTokenT.equals(TokenT.SEMICOLONS) ) {// ';'
-                        Variables prevVars = currVars.skipCurBrace(0);
+                        prevVars = currVars.skipCurBrace(0);
                         if (tokens.hasNext()) {
                             return parseFunction(node, tokens.getNextType(), prevVars);
                         } else return node;
                     }
-                    else if (!currTokenT.equals(TokenT.OPEN_BRACE)) {// ':'
+                    else if (!currTokenT.equals(TokenT.OPEN_BRACE)) {
                         return parseError("Invalid 'main' function declaration");
                     }
                 }
@@ -91,20 +93,17 @@ class Compiler {
 
                 //body of main function
                 name = "main";
-                Node mainFunc = new Node("main_func", 2);
+                Node mainFunc = new Node("main_func", Integer.MAX_VALUE);
                 node.addChild(mainFunc);
-                Node main = new Node("main_name", 0);
-                mainFunc.addChild(main);
-                Node mainBody = new Node("main_body", Integer.MAX_VALUE);
-                mainFunc.addChild(mainBody);
+                mainFunc.addChild(new Node("main_name", 0));
 
                 boolean containsCheck =  functions.foundFunc(name, 0);
                 boolean noSuchBodyCheck = functions.functionBody(name, 0);
                 if(!(containsCheck && noSuchBodyCheck))
                     return parseError("Parsing error: There are 2 main functions");
 
-                Node withBody = parseFuncBody(mainBody, currVars);
-                if (withBody == null || !withBody.equals(mainBody))
+                Node withBody = parseFuncBody(mainFunc, currVars);
+                if (withBody == null || !withBody.equals(mainFunc))
                     return null;
             }
 
@@ -112,7 +111,6 @@ class Compiler {
             else if (currTokenT.equals((TokenT.IDENTIFIER))) {
                 name = tokens.currVal();
                 if (tokens.getNextType().equals(TokenT.OPEN_PARENTHESES)) {
-                    Node FuncName = new Node(name + "_name", 0);
                     Node paramNode = new Node(name + "_param", 10);
                     Node withParam = parseFuncParam(paramNode, currVars);
                     if (withParam == null || withParam != paramNode)
@@ -124,18 +122,15 @@ class Compiler {
                     currTokenT = tokens.getNextType();
                     if (currTokenT.equals(TokenT.SEMICOLONS)) {
                         //function declaration
-                        Node currFunc = new Node(name + "_func", 2);
-                        node.addChild(currFunc);
-                        currFunc.addChild(FuncName);
-                        currFunc.addChild(paramNode);
-                        Variables prevVars = currVars.skipCurBrace(paramCount);
+                        prevVars = currVars.skipCurBrace(paramCount);
                         return safeRecursion(node, prevVars);
                     }
                     else if (currTokenT.equals(TokenT.OPEN_BRACE)) {
                         //function definition
+                        node.newFunc();
                         Node currFunc = new Node(name + "_func", 3);
                         node.addChild(currFunc);
-                        currFunc.addChild(FuncName);
+                        currFunc.addChild(new Node(name + "_name", 0));
                         currFunc.addChild(paramNode);
                         Node funcBody = new Node(name + "_body", Integer.MAX_VALUE);
                         currFunc.addChild(funcBody);
@@ -154,9 +149,9 @@ class Compiler {
                 } else return parseError("Parsing error: expected '(' after the name of the function");
             }
             else return parseError("Parsing error: invalid name of the function");
+            prevVars = currVars.closeBrace();
         }
         else return parseError("Parsing error! Invalid type of function");
-
 
         boolean finalBrace = false;
         while (tokens.hasNext())
@@ -166,7 +161,7 @@ class Compiler {
             }
         if(!finalBrace)
             return parseError("Invalid the end of the " + name + " function");
-        else return safeRecursion(node, currVars);
+        else return safeRecursion(node, prevVars);
     }
 
     private Node safeRecursion(Node node, Variables variables){
@@ -188,6 +183,7 @@ class Compiler {
             }
             vars.addVar(tokens.currVal() + "_var");
             Node paramNode = new Node(tokens.currVal() + "_var", 0);
+            paramNode.isParam();
             paramNode.setPoint(vars.getPoint(tokens.currVal() + "_var"));
             node.addChild(paramNode);
 
@@ -280,7 +276,28 @@ class Compiler {
                             return parseError("Error while parsing! Variable " + currNode.getValue() + " is not initialised!");
                         }
                         currNode = currNode.getParent();
-                    } else return parseError("Error occurred after variable " + name);
+                    } else if(currTokenT.equals(TokenT.DIVISION)){
+                        tokens.getNextType();
+                        Node divNode = new Node("/", 2);
+                        currNode.addChild(divNode);
+
+                        Node childNode = new Node(name + "_val", 0);
+                        int index = vars.getVal( name + "_var");
+                        childNode.setPoint(index);
+                        divNode.addChild(childNode);
+
+                        Node dividerNode = new Node("((", 1);
+                        divNode.addChild(dividerNode);
+                        Node statNode = parseStatement(dividerNode, TokenT.SEMICOLONS, vars, tokens.getNextType());
+                        if (statNode == null || !statNode.equals(dividerNode))
+                            return parseError("Error while parsing statement");
+
+                        if (!vars.addVal(currNode.getValue())) {
+                            return parseError("Error while parsing! Variable " + currNode.getValue() + " is not initialised!");
+                        }
+                        currNode = currNode.getParent();
+
+                    }else return parseError("Error occurred after variable " + name);
                 }
             }
             else if(hasType){
@@ -407,7 +424,8 @@ class Compiler {
                 if(currNode == null) return null;
             }
             try {
-                while (currNode.hasMaxChildren() && !(currNode.getValue().equals("(") || currNode.getValue().equals("if"))) {
+                while (currNode.hasMaxChildren() && !(currNode.getValue().equals("(")  ||
+                        currNode.getValue().equals("((") || currNode.getValue().equals("if"))) {
                     currNode = currNode.getParent();
                 }
             } catch (NullPointerException e){
@@ -452,9 +470,9 @@ class Compiler {
     //----------------------------------------------------Generation--------------------------------------------------
 
     public String generator(Node node) {
+        node.setMainLast();
         System.out.println("---------Generation started---------");
         StringBuilder code = new StringBuilder();
-        String funcName = node.getValue();
         code.append(".386\n")
                 .append(".model flat, stdcall\n")
                 .append("option casemap :none\n\n")
@@ -465,7 +483,7 @@ class Compiler {
                 .append("includelib C:\\masm32\\lib\\kernel32.lib\n")
                 .append("includelib C:\\masm32\\lib\\user32.lib\n\n")
 
-                .append(funcName).append(" PROTO\n\n")
+                .append("main PROTO\n\n")
 
                 .append(".data\n")
                 .append("msg_title db \"Result\", 0\n")
@@ -474,14 +492,10 @@ class Compiler {
 
                 .append(".code\n")
                 .append("start:\n")
-                .append("\tinvoke ").append(funcName)
+                .append("\tinvoke main")
                 .append("\n\tinvoke wsprintf, addr buffer, addr format, eax\n")
                 .append("\tinvoke MessageBox, 0, addr buffer, addr msg_title, 0\n")
-                .append("\tinvoke ExitProcess, 0\n\n")
-
-                .append(funcName).append(" PROC\n")
-                .append("\tpush ebp\n")
-                .append("\tmov ebp, esp\n\n");
+                .append("\tinvoke ExitProcess, 0\n\n");
 
         Node curr = node;
         boolean done = false;
@@ -495,7 +509,7 @@ class Compiler {
             }
         }
 
-        code.append(funcName).append(" ENDP\n")
+        code.append("main ENDP\n")
                 .append("END start\n");
         return code.toString();
     }
@@ -612,6 +626,17 @@ class Node {
     private static int loopCount = 0;
     private boolean afterElse = false;
     private static int divCount = 0;
+    private boolean isParam = false;
+    private static int lastVarID = 0;
+    private static int localVarShift = 0;
+
+    public void isParam(){
+        isParam = true;
+    }
+
+    public void newFunc(){
+        localVarShift = lastVarID;
+    }
 
     public Node(String value, int maxChildren) {
         this.children = new ArrayList<>(1);
@@ -623,23 +648,6 @@ class Node {
 
     public int getChildrenCount(){
         return childrenCount;
-    }
-
-    public boolean equal(Node node) {
-        if(node.maxChildren == 0 && this.maxChildren == 0)
-            return  true;
-        if(!this.value.equals(node.value))
-            return false;
-
-        try {
-            for (int i = 0; i < children.size(); i++)
-                if (!children.get(i).equal(node.children.get(i)))
-                    return false;
-        }catch(IndexOutOfBoundsException e){
-            return false;
-        }
-
-        return true;
     }
 
     public String getValue() {
@@ -686,8 +694,20 @@ class Node {
         newChild.setParent(this);
     }
 
+    public void setMainLast(){
+        for (Node childNode :
+                children) {
+            if(childNode.getValue().equals("main_func")) {
+                children.remove(childNode);
+                children.add(childNode);
+                return;
+            }
+        }
+    }
+
     public void setPoint(int val){
-        point = (val + 3) * 4;
+        lastVarID = val;
+        point = (val + 2 - localVarShift) * 4;
     }
 
     public void switchAfterElse(){
@@ -695,7 +715,12 @@ class Node {
     }
 
     public void codeGenerate(StringBuilder code) {
-        if (value.matches("&&")) {
+        if (value.matches("return")) {
+            code.append("\tpop eax ;here is the result\n")
+                    .append("\tmov esp, ebp  ; restore ESP; now it points to old EBP\n")
+                    .append("\tpop ebp       ; restore old EBP; now ESP is where it was before prologue\n");
+        }
+        else if (value.matches("&&")) {
 
             code.append("\tpop ECX\n")
                     .append("\tpop EAX\n")
@@ -746,12 +771,6 @@ class Node {
                     .append("\tpush EBX\n\n");
 
         }
-        else if (value.matches("return")) {
-            code.append("\tpop eax ;here is the result\n")
-                    .append("\tmov esp, ebp  ; restore ESP; now it points to old EBP\n")
-                    .append("\tpop ebp       ; restore old EBP; now ESP is where it was before prologue\n")
-                    .append("\tret\n");
-        }
         else if (value.matches("if")) {
             loopCount += 2;
             code.append("pop eax\t;if\n" +
@@ -770,6 +789,10 @@ class Node {
             if (this.childrenCount > 0) {
                 code.append("\tpop " + "[ebp-").append(point).append("]\n");
             }
+            if(isParam){
+                code.append("\tmov eax, [ebp+" + point + "]\n");
+                code.append("\tmov [ebp-" + point + "], eax\n");
+            }
         }
         else if (value.matches("[a-zA-Z_][a-zA-Z_0-9]*_val")) {
             code.append("\tpush [ebp-").append(point).append("]     ;").append(value).append("\n");
@@ -777,19 +800,51 @@ class Node {
         else if(afterElse && value.matches("\\{")) {
             code.append("_L" +  (loopCount +1) + ":\n");
         }
+        else if(value.matches("[a-zA-Z_][a-zA-Z_0-9]*_name")){
+            code.append(value.substring(0, value.lastIndexOf("_")) + " proc\n")
+            .append("\tpush ebp\n\tmov ebp, esp\n");
+        }
+        else if(value.matches("[a-zA-Z_][a-zA-Z_0-9]*_call")){
+            code.append("call " + value.substring(0, value.lastIndexOf("_")) + "\n")
+                    .append("\tpush eax\n");
+
+        }
+        else if(value.matches("[a-zA-Z_][a-zA-Z_0-9]*_body")){
+            code.append(value.substring(0, value.lastIndexOf("_")) + " endp\n");
+        }
+        else if(value.matches("[a-zA-Z_][a-zA-Z_0-9]*_param")){
+            code.append(";" + value + " \n");
+        }
     }
 
     public Node getTailChild(int place) {
         int index = this.children.size() - place;
         return this.children.get(index);
     }
+
+//    public boolean equal(Node node) {
+//        if(node.maxChildren == 0 && this.maxChildren == 0)
+//            return  true;
+//        if(!this.value.equals(node.value))
+//            return false;
+//
+//        try {
+//            for (int i = 0; i < children.size(); i++)
+//                if (!children.get(i).equal(node.children.get(i)))
+//                    return false;
+//        }catch(IndexOutOfBoundsException e){
+//            return false;
+//        }
+//
+//        return true;
+//    }
+
 }
 
 class Variables{
 
     private final Map<String, Boolean> varList = new HashMap<>();
     private static final ArrayList<String> variables = new ArrayList<>();
-
     private Variables parrent;
     private final ArrayList<Variables> children = new ArrayList<>();
 
@@ -885,9 +940,7 @@ class Functions{
     }
 
     public boolean containsMain() {
-        if (!defNames.contains("main"))
-            return false;
-        return true;
+        return defNames.contains("main");
     }
 
     public String finalCheck() {

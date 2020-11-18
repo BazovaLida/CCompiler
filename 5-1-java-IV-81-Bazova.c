@@ -1,7 +1,4 @@
-int foo(int a);
- int foo(int b){
- return b / 1;
- }
- int main() {
- return foo(4);
+int main() {
+ int c = 10;
+ return c;
  }
