@@ -127,7 +127,7 @@ class Compiler {
                     }
                     else if (currTokenT.equals(TokenT.OPEN_BRACE)) {
                         //function definition
-                        node.newFunc();
+//                        node.newFunc();
                         Node currFunc = new Node(name + "_func", 3);
                         node.addChild(currFunc);
                         currFunc.addChild(new Node(name + "_name", 0));
@@ -627,16 +627,17 @@ class Node {
     private boolean afterElse = false;
     private static int divCount = 0;
     private boolean isParam = false;
-    private static int lastVarID = 0;
-    private static int localVarShift = 0;
+//    private static int lastVarID = 0;
+//    private static int localVarShift = 0;
+    private static int curr_param_count = 0;
 
     public void isParam(){
         isParam = true;
     }
 
-    public void newFunc(){
-        localVarShift = lastVarID;
-    }
+//    public void newFunc(){
+//        localVarShift = lastVarID;
+//    }
 
     public Node(String value, int maxChildren) {
         this.children = new ArrayList<>(1);
@@ -706,8 +707,8 @@ class Node {
     }
 
     public void setPoint(int val){
-        lastVarID = val;
-        point = (val + 2 - localVarShift) * 4;
+//        lastVarID = val;
+        point = (val + 2) * 4;
     }
 
     public void switchAfterElse(){
@@ -718,7 +719,8 @@ class Node {
         if (value.matches("return")) {
             code.append("\tpop eax ;here is the result\n")
                     .append("\tmov esp, ebp  ; restore ESP; now it points to old EBP\n")
-                    .append("\tpop ebp       ; restore old EBP; now ESP is where it was before prologue\n");
+                    .append("\tpop ebp       ; restore old EBP; now ESP is where it was before prologue\n")
+                    .append("\tret " + curr_param_count + "\n\n");
         }
         else if (value.matches("&&")) {
 
@@ -787,11 +789,11 @@ class Node {
         }
         else if (value.matches("[a-zA-Z_][a-zA-Z_0-9]*_var")) {
             if (this.childrenCount > 0) {
-                code.append("\tpop " + "[ebp-").append(point).append("]\n");
+                code.append("\tpop " + "[ebp-").append(point).append("];\t" + value +"\n");
             }
             if(isParam){
                 code.append("\tmov eax, [ebp+" + point + "]\n");
-                code.append("\tmov [ebp-" + point + "], eax\n");
+                code.append("\tmov [ebp-" + point + "], eax\t;" + value + "\n");
             }
         }
         else if (value.matches("[a-zA-Z_][a-zA-Z_0-9]*_val")) {
@@ -801,6 +803,12 @@ class Node {
             code.append("_L" +  (loopCount +1) + ":\n");
         }
         else if(value.matches("[a-zA-Z_][a-zA-Z_0-9]*_name")){
+            if(value.matches("main_name"))
+                curr_param_count = 0;
+            else {
+                ArrayList<Node> params = parent.children.get(1).children;
+                Collections.reverse(params);
+            }
             code.append(value.substring(0, value.lastIndexOf("_")) + " proc\n")
             .append("\tpush ebp\n\tmov ebp, esp\n");
         }
@@ -813,6 +821,7 @@ class Node {
             code.append(value.substring(0, value.lastIndexOf("_")) + " endp\n");
         }
         else if(value.matches("[a-zA-Z_][a-zA-Z_0-9]*_param")){
+            curr_param_count = this.children.size();
             code.append(";" + value + " \n");
         }
     }
@@ -821,24 +830,6 @@ class Node {
         int index = this.children.size() - place;
         return this.children.get(index);
     }
-
-//    public boolean equal(Node node) {
-//        if(node.maxChildren == 0 && this.maxChildren == 0)
-//            return  true;
-//        if(!this.value.equals(node.value))
-//            return false;
-//
-//        try {
-//            for (int i = 0; i < children.size(); i++)
-//                if (!children.get(i).equal(node.children.get(i)))
-//                    return false;
-//        }catch(IndexOutOfBoundsException e){
-//            return false;
-//        }
-//
-//        return true;
-//    }
-
 }
 
 class Variables{
@@ -952,46 +943,3 @@ class Functions{
         return null;
     }
 }
-//    private static int count = -1;
-//    private int id;
-//    private String name;
-//    private Variables variables;
-//    private boolean beforeMain;
-//    private boolean definition;
-//
-//    public boolean add(String name, Node paramNode, Variables vars, boolean definition, boolean beforeMain) {
-//        if (definition) {
-//            if (defNames.contains(name))//                    declNames.contains(name) && !definition) {
-//                return false;
-//            else if (declNames.contains(name))
-//                id = declNames.indexOf(name);
-//            else {
-//                count++;
-//                id = count;
-//            }
-//            defNames.add(id, name);
-//        }
-//        else {
-//            if(declNames.contains(name))
-//                return false;
-//            else if (defNames.contains(name))
-//                id = defNames.indexOf(name);
-//            else {
-//                count++;
-//                id =  count;
-//            }
-//            declNames.add(id, name);
-//        }
-//        try{
-//            if(!nodes.get(id).equal(paramNode))
-//                return false;
-//        } catch (IndexOutOfBoundsException e){
-//            nodes.add(id, paramNode);
-//        }
-//        this.name = name;
-//        this.definition = definition;
-//        this.beforeMain = beforeMain;
-//        this.variables = vars;
-//        return true;
-//    }
-//}
