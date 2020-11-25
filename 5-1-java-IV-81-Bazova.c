@@ -1,10 +1,6 @@
 int main() {
-    int a = 100;
-    if(a){
-        a = 1;
-    }
-    else{
-        a = 4;
+    for (int i = 0; ; i = i + 1) {
+        // do something
     }
     return a;
 }
