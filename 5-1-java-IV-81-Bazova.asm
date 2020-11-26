@@ -8,7 +8,11 @@ include C:\masm32\include\user32.inc
 includelib C:\masm32\lib\kernel32.lib
 includelib C:\masm32\lib\user32.lib
 
+<<<<<<< HEAD
 main PROTO
+=======
+ PROTO
+>>>>>>> newFB
 
 .data
 msg_title db "Result", 0
@@ -17,11 +21,16 @@ format db "%d",0
 
 .code
 start:
+<<<<<<< HEAD
 	invoke main
+=======
+	invoke 
+>>>>>>> newFB
 	invoke wsprintf, addr buffer, addr format, eax
 	invoke MessageBox, 0, addr buffer, addr msg_title, 0
 	invoke ExitProcess, 0
 
+<<<<<<< HEAD
 foo proc
 	push ebp
 	mov ebp, esp
@@ -169,4 +178,11 @@ _D7:
 	ret 0
 
 main ENDP
+=======
+ PROC
+	push ebp
+	mov ebp, esp
+
+ ENDP
+>>>>>>> newFB
 END start

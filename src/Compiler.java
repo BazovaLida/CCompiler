@@ -46,7 +46,7 @@ class Compiler {
     }
 
     //------------------------------------------------------Parsing----------------------------------------------------
-    private Functions functions = new Functions();
+    private final Functions functions = new Functions();
     public Node startParsing() {
         System.out.println("---------Parsing started---------");
         Variables vars = new Variables();
@@ -237,71 +237,85 @@ class Compiler {
             }
 
             if (currTokenT.equals(TokenT.IDENTIFIER)) {
-                String name = tokens.currVal();
-                currTokenT = tokens.getNextType();
-                if (currTokenT.equals(TokenT.OPEN_PARENTHESES)) {
-                    if(hasType)
-                        return parseError("Parsing error: there is an identifier before function call!");
-
-                    Node callNode = callFunction(name, currNode, vars);
-                    if (callNode == null || !callNode.equals(currNode))
-                        return null;
-                    if(!tokens.getNextType().equals(TokenT.SEMICOLONS))
-                        return parseError("Error after parsing call of '" + name + "' function");
-                } else {
-                    boolean canBeDecl = vars.contains(name + "_var");
-                    boolean canBeInit = vars.totalContains(name + "_var");
-                    if (hasType) {
-                        if (canBeDecl) {
-                            return parseError("The variable " + name + " is declarated several times!");
-                        }
-                        vars.addVar(name + "_var");
-                    } else if (!canBeInit) {
-                        return parseError("Variable " + name + " initialized, but not declarated");
-                    }
-
-                    Node var = new Node( name + "_var", 2);
-                    currNode.addChild(var);
-                    currNode = var;
-                    currNode.setPoint(vars.getPoint(name + "_var"));
-
-                    if (currTokenT.equals(TokenT.SEMICOLONS)) {
-                        currNode = currNode.getParent();
-                    } else if (currTokenT.equals(TokenT.EQUALS)) {
-                        Node statNode = parseStatement(currNode, TokenT.SEMICOLONS, vars, tokens.getNextType());
-                        if (statNode == null || !statNode.equals(currNode))
-                            return parseError("Error while parsing statement");
-
-                        if (!vars.addVal(currNode.getValue())) {
-                            return parseError("Error while parsing! Variable " + currNode.getValue() + " is not initialised!");
-                        }
-                        currNode = currNode.getParent();
-                    } else if(currTokenT.equals(TokenT.DIVISION)){
-                        tokens.getNextType();
-                        Node divNode = new Node("/", 2);
-                        currNode.addChild(divNode);
-
-                        Node childNode = new Node(name + "_val", 0);
-                        int index = vars.getVal( name + "_var");
-                        childNode.setPoint(index);
-                        divNode.addChild(childNode);
-
-                        Node dividerNode = new Node("((", 1);
-                        divNode.addChild(dividerNode);
-                        Node statNode = parseStatement(dividerNode, TokenT.SEMICOLONS, vars, tokens.getNextType());
-                        if (statNode == null || !statNode.equals(dividerNode))
-                            return parseError("Error while parsing statement");
-
-                        if (!vars.addVal(currNode.getValue())) {
-                            return parseError("Error while parsing! Variable " + currNode.getValue() + " is not initialised!");
-                        }
-                        currNode = currNode.getParent();
-
-                    }else return parseError("Error occurred after variable " + name);
-                }
+                Node withIdentif = parseIdentifier(vars, hasType, currNode);
+                if (withIdentif == null || !withIdentif.equals(currNode))
+                    return null;
             }
             else if(hasType){
                 return parseError("Error while parsing! There is keyword and no variable after that");
+            }
+            else if(currTokenT.equals(TokenT.KEYWORD_FOR)){
+                vars.openBrace();
+                Node forNode = new Node("for", 4);
+                currNode.addChild(forNode);
+                if(!tokens.getNextType().equals(TokenT.OPEN_PARENTHESES))
+                    return parseError("Parsing error: there is no '(' after 'for'");
+
+                // initial clause
+                hasType = tokens.getNextType().equals(TokenT.KEYWORD_INT);
+                currTokenT = tokens.getNextType();
+                if(currTokenT.equals(TokenT.IDENTIFIER)) {
+                    Node withIdentif = parseIdentifier(vars, hasType, forNode);
+                    if (withIdentif == null || !withIdentif.equals(forNode))
+                        return parseError("Error while parsing identifier for 'for' loop");
+                } else if(!currTokenT.equals(TokenT.SEMICOLONS)) {
+                    return parseError("Parsing error: expected initial clause after 'for(' or nothing before ';'");
+                }
+
+                // controlling expression
+                currTokenT = tokens.getNextType();
+                if(currTokenT.equals(TokenT.IDENTIFIER) && vars.getVal(tokens.currVal() + "_var") != -1){
+                    Node identNode = new Node(tokens.currVal() + "_val", 2);
+                    forNode.addChild(identNode);
+                    currTokenT = tokens.getNextType();
+                    if(currTokenT.equals(TokenT.LESS_THAN)){
+                        currTokenT = tokens.getNextType();
+                        if(currTokenT.equals(TokenT.EQUALS)){
+                            identNode.addChild(new Node("minusOne", 0));
+                            currTokenT = tokens.getNextType();
+                        }
+
+                        Node lessNode = new Node("less", 2); //2 for statement function
+                        identNode.addChild(lessNode);
+                        Node withStat = parseStatement(lessNode, TokenT.SEMICOLONS, vars, currTokenT);
+                        if (withStat == null || !withStat.equals(lessNode))
+                            return parseError("Error while parsing statement after '<' in 'for' loop");
+
+                        if(!tokens.getNextType().equals(TokenT.SEMICOLONS))
+                            return parseError("Parsing error: expected ';' after controlling expression in 'for' loop");
+                    }
+                    else if(currTokenT.equals(TokenT.MORE_THAN)){
+                        currTokenT = tokens.getNextType();
+                        if(currTokenT.equals(TokenT.EQUALS)){
+                            identNode.addChild(new Node("plusOne", 0));
+                            currTokenT = tokens.getNextType();
+                        }
+
+                        Node lessNode = new Node("more", 2); //2 for statement function
+                        identNode.addChild(lessNode);
+                        Node withStat = parseStatement(lessNode, TokenT.SEMICOLONS, vars, currTokenT);
+                        if (withStat == null || !withStat.equals(lessNode))
+                            return parseError("Error while parsing statement after '>' in 'for' loop");
+
+                        if(!tokens.getNextType().equals(TokenT.SEMICOLONS))
+                            return parseError("Parsing error: expected ';' after controlling expression in 'for' loop");
+                    }
+                    else if(!currTokenT.equals(TokenT.SEMICOLONS)){
+                        return parseError("Parsing error: unexpected token '" + tokens.currVal() + "' in 'for' loop!");
+                    }
+                }else if(currTokenT.equals(TokenT.SEMICOLONS)) {
+                    forNode.addChild(new Node("1", 0));
+                }else {
+                    Node withStat = parseStatement(forNode, TokenT.SEMICOLONS, vars, currTokenT);
+                    if (withStat == null || !withStat.equals(forNode))
+                        return parseError("Error while parsing controlling expression in 'for' loop");
+                }
+
+                // post-expression
+                currTokenT = tokens.getNextType();
+                int i = 10;
+
+
             }
             else if (currTokenT.equals(TokenT.KEYWORD_IF)){
                 Node childNode = new Node("if", 2);
@@ -362,16 +376,83 @@ class Compiler {
         Node retNode = new Node("return", 2);
         mainNode.addChild(retNode);
         Node newRet = parseStatement(retNode, TokenT.SEMICOLONS, vars, tokens.getNextType());
-        if (newRet == null || !newRet.equals(retNode))
+        if (newRet == null || !newRet.equals(retNode)) {
             return parseError("Error while parsing statement after 'return'");
+        }
         return mainNode;
     }
 
-    private Node parseStatement(Node currNode, TokenT stopStopT, Variables vars, TokenT currTokenT) {
+    private Node parseIdentifier(Variables vars, boolean hasType, Node currNode){
+        String name = tokens.currVal();
+        TokenT currTokenT = tokens.getNextType();
+        if (currTokenT.equals(TokenT.OPEN_PARENTHESES)) {
+            if(hasType)
+                return parseError("Parsing error: there is an identifier before function call!");
+
+            Node callNode = callFunction(name, currNode, vars);
+            if (callNode == null || !callNode.equals(currNode))
+                return null;
+            if(!tokens.getNextType().equals(TokenT.SEMICOLONS))
+                return parseError("Error after parsing call of '" + name + "' function");
+        } else {
+            boolean canBeDecl = vars.contains(name + "_var");
+            boolean canBeInit = vars.totalContains(name + "_var");
+            if (hasType) {
+                if (canBeDecl) {
+                    return parseError("The variable " + name + " is declarated several times!");
+                }
+                vars.addVar(name + "_var");
+            } else if (!canBeInit) {
+                return parseError("Variable " + name + " initialized, but not declarated");
+            }
+
+            Node var = new Node( name + "_var", 2);
+            currNode.addChild(var);
+            currNode = var;
+            currNode.setPoint(vars.getPoint(name + "_var"));
+
+            if (currTokenT.equals(TokenT.SEMICOLONS)) {
+                currNode = currNode.getParent();
+            } else if (currTokenT.equals(TokenT.EQUALS)) {
+                Node statNode = parseStatement(currNode, TokenT.SEMICOLONS, vars, tokens.getNextType());
+                if (statNode == null || !statNode.equals(currNode))
+                    return parseError("Error while parsing statement");
+
+                if (!vars.addVal(currNode.getValue())) {
+                    return parseError("Error while parsing! Variable " + currNode.getValue() + " is not initialised!");
+                }
+                currNode = currNode.getParent();
+            } else if(currTokenT.equals(TokenT.DIVISION)){
+                tokens.getNextType();
+                Node divNode = new Node("/", 2);
+                currNode.addChild(divNode);
+
+                Node childNode = new Node(name + "_val", 0);
+                int index = vars.getVal( name + "_var");
+                childNode.setPoint(index);
+                divNode.addChild(childNode);
+
+                Node dividerNode = new Node("((", 1);
+                divNode.addChild(dividerNode);
+                Node statNode = parseStatement(dividerNode, TokenT.SEMICOLONS, vars, tokens.getNextType());
+                if (statNode == null || !statNode.equals(dividerNode))
+                    return parseError("Error while parsing statement");
+
+                if (!vars.addVal(currNode.getValue())) {
+                    return parseError("Error while parsing! Variable " + currNode.getValue() + " is not initialised!");
+                }
+                currNode = currNode.getParent();
+
+            }else return parseError("Error occurred after variable " + name);
+        }
+        return currNode;
+    }
+
+    private Node parseStatement(Node currNode, TokenT stopTokenT, Variables vars, TokenT currTokenT) {
         EnumSet<TokenT> binaryOp = EnumSet.of(TokenT.DIVISION, TokenT.MULTIPLICATION, TokenT.LOGICAL_AND);
         Node basic = currNode;
 
-        while (!currTokenT.equals(stopStopT) || currNode.getValue().equals("(")) {
+        while (!currTokenT.equals(stopTokenT) || currNode.getValue().equals("(")) {
             if (currTokenT.equals(TokenT.NEGATION)) {
                 if (currNode.getValue().equals("(") || currNode.equals(basic)) {
                     Node childNode = new Node("-", 1);
@@ -407,7 +488,7 @@ class Compiler {
                         currNode = currNode.getParent();
                     }
                 } catch (NullPointerException e) {
-                    if(stopStopT.equals(TokenT.COMMA)) {
+                    if(stopTokenT.equals(TokenT.COMMA)) {
                         tokens.indexMinus(1);
                         return basic;
                     }
@@ -528,17 +609,20 @@ enum TokenT {
     KEYWORD_ELSE("else"),
     KEYWORD_RETURN("return"),
     KEYWORD_MAIN("main"),
+    KEYWORD_FOR("for"),
+    KEYWORD_BREAK("break"),
+    KEYWORD_CONTINUE("continue"),
     INT_CONSTANT("[0-9]+"),
     INT_BIN_CONSTANT("b[01]+\\b"),
     IDENTIFIER("[a-zA-Z_][a-zA-Z_0-9]*"),
     OPEN_PARENTHESES("\\("),
-    OPEN_INCLUDE("<"),
     DIVIDE_ASSIGN("/="),
     OPEN_BRACE("\\{"),
     CLOSE_PARENTHESES("\\)"),
-    CLOSE_INCLUDE(">"),
     CLOSE_BRACE("}"),
     EQUALS("="),
+    MORE_THAN(">"),
+    LESS_THAN("<"),
     BITWISE_COMPLEMENT("~"),
     LOGICAL_AND("&&"),
     LOGICAL_NEGATION("!"),
@@ -606,10 +690,6 @@ class Tokens {
         return tokens.get(index);
     }
 
-//    public int currIndex() {
-//        return index;
-//    }
-
     public boolean hasNext(){
         return types.size() > index + 1;
     }
@@ -627,8 +707,6 @@ class Node {
     private boolean afterElse = false;
     private static int divCount = 0;
     private boolean isParam = false;
-//    private static int lastVarID = 0;
-//    private static int localVarShift = 0;
     private static int curr_param_count = 0;
 
     public void isParam(){
@@ -871,7 +949,7 @@ class Variables{
 
     public int getVal(String var){
         return variables.lastIndexOf(var);
-     }
+    }
 
     public Variables openBrace(){
         Variables child = new Variables();
