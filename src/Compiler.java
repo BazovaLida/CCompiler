@@ -280,17 +280,17 @@ class Compiler {
                 if(currTokenT.equals(TokenT.IDENTIFIER) && vars.totalContains(tokens.currVal() + "_var") &&
                     tokens.getNextType().equals(TokenT.LESS_THAN)){
                     tokens.indexMinus(1);
-                    Node identNode = new Node(tokens.currVal() + "_val_to_reg", 2);
+                    Node identNode = new Node(tokens.currVal() + "_val_for", 2);
+                    identNode.setPoint(vars.getVal( tokens.currVal() + "_var"));
                     forNode.addChild(identNode);
                     tokens.getNextType();
                     currTokenT = tokens.getNextType();
                     if(currTokenT.equals(TokenT.EQUALS)) {
-                        identNode.addChild(new Node("minusOne", 0));
+                        forNode.addChild(new Node("minusOne", 0));
                         currTokenT = tokens.getNextType();
                     }
 
-                    Node lessNode = new Node("less", 2); //2 for statement function
-                    lessNode.setPoint(forPoint);
+                    Node lessNode = new Node("less" + forPoint, 2); //2 for statement function
                     currNode.addChild(lessNode);
                     Node withStat = parseStatement(lessNode, TokenT.SEMICOLONS, vars, currTokenT);
                     if (withStat == null || !withStat.equals(lessNode))
@@ -299,17 +299,17 @@ class Compiler {
                 else if(currTokenT.equals(TokenT.IDENTIFIER) && vars.totalContains(tokens.currVal() + "_var") &&
                         tokens.getNextType().equals(TokenT.MORE_THAN)){
                     tokens.indexMinus(1);
-                    Node identNode = new Node(tokens.currVal() + "_val_to_reg", 2);
+                    Node identNode = new Node(tokens.currVal() + "_val_for", 2);
+                    identNode.setPoint(vars.getVal( tokens.currVal() + "_var"));
                     forNode.addChild(identNode);
                     tokens.getNextType();
                     currTokenT = tokens.getNextType();
                     if(currTokenT.equals(TokenT.EQUALS)) {
-                        identNode.addChild(new Node("plusOne", 0));
+                        forNode.addChild(new Node("plusOne", 0));
                         currTokenT = tokens.getNextType();
                     }
 
-                    Node moreNode = new Node("more", 2); //2 for statement function
-                    moreNode.setPoint(forPoint);
+                    Node moreNode = new Node("more" + forPoint, 2); //2 for statement function
                     forNode.addChild(moreNode);
                     Node withStat = parseStatement(moreNode, TokenT.SEMICOLONS, vars, currTokenT);
                     if (withStat == null || !withStat.equals(moreNode))
@@ -340,6 +340,16 @@ class Compiler {
                 if(!tokens.getNextType().equals(TokenT.OPEN_BRACE)){
                     return parseError("Parsing error! Expected '{' after 'for(...)'");
                 }
+            }
+            else if(currTokenT.equals(TokenT.KEYWORD_BREAK)) {
+                currNode.addChild(new Node("BREAK", 0));
+                if(!tokens.getNextType().equals(TokenT.SEMICOLONS))
+                    return parseError("Parsing error! Unexpected symbol '" + tokens.currVal() + "' after keyword 'break'");
+            }
+            else if(currTokenT.equals(TokenT.KEYWORD_CONTINUE)){
+                currNode.addChild(new Node("CONTINUE", 0));
+                if(!tokens.getNextType().equals(TokenT.SEMICOLONS))
+                    return parseError("Parsing error! Unexpected symbol '" + tokens.currVal() + "' after keyword 'continue'");
             }
             else if (currTokenT.equals(TokenT.KEYWORD_IF)){
                 Node childNode = new Node("if", 2);
@@ -483,15 +493,20 @@ class Compiler {
                     return parseError("Error while parsing '-': unary operation is without ()");
             }
             else if (binaryOp.contains(currTokenT)) {
-                if (currTokenT.equals(TokenT.LOGICAL_AND)) {
-                    while (currNode.hasMaxChildren() &&
-                            !currNode.getValue().equals("(") && !currNode.equals(basic)) {
-                        currNode = currNode.getParent();
+                if (currTokenT.equals(TokenT.ADDITION)) {
+                    while (currNode.getTailChild(1).getValue().equals("&&") &&
+                            !currNode.getValue().equals("(")) {
+                        currNode = currNode.getTailChild(1);
+                    }
+                } else if (currTokenT.equals(TokenT.DIVISION)) {
+                    while ((currNode.getTailChild(1).getValue().equals("&&") || currNode.getTailChild(1).getValue().equals("+"))&&
+                            !currNode.getValue().equals("(")) {
+                        currNode = currNode.getTailChild(1);
                     }
                 }
-                if (currNode.hasNextChild()) {
+                if (currNode.getChildrenCount() != 0) {
                     Node binaryNode = new Node(tokens.currVal(), 2);
-                    Node child = currNode.removeChild();
+                    Node child = currNode.removeLastChild();
                     binaryNode.addChild(child);
                     currNode.addChild(binaryNode);
                     currNode = binaryNode;
@@ -516,7 +531,7 @@ class Compiler {
                 }
                 if (currNode.hasMaxChildren()) {
                     Node parent = currNode.getParent();
-                    parent.replaceChild(currNode, currNode.getChild());
+                    parent.replaceChild(currNode, currNode.getTailChild(1));
                     currNode = parent;
                 }
             }
@@ -553,7 +568,8 @@ class Compiler {
             val = Integer.toString(Integer.parseInt(val, 2));
             childNode = new Node(val, 0);
             currNode.addChild(childNode);
-        } else if (index != -1) {
+        }
+        else if (index != -1) {
             String val =  tokens.currVal() + "_val";
             childNode = new Node(val, 0);
             childNode.setPoint(index);
@@ -598,17 +614,8 @@ class Compiler {
                 .append("\tinvoke MessageBox, 0, addr buffer, addr msg_title, 0\n")
                 .append("\tinvoke ExitProcess, 0\n\n");
 
-        Node curr = node;
-        boolean done = false;
-        while (!done) {
-            if (curr.hasNextChild()) {
-                curr = curr.getChild();
-            } else {
-                curr.codeGenerate(code);
-                if (curr == node) done = true;
-                else curr = curr.getParent();
-            }
-        }
+        boolean success = Node.startGenerate(node, code);
+        if(!success) return null;
 
         code.append("main ENDP\n")
                 .append("END start\n");
@@ -728,10 +735,7 @@ class Node {
     private static int divCount = 0;
     private boolean isParam = false;
     private static int curr_param_count = 0;
-
-    public void isParam(){
-        isParam = true;
-    }
+    private static int forCycleCount = 0;
 
     public Node(String value, int maxChildren) {
         this.children = new ArrayList<>(1);
@@ -741,98 +745,54 @@ class Node {
         this.maxChildren = maxChildren;
     }
 
-    public int getChildrenCount(){
-        return childrenCount;
-    }
-
-    public String getValue() {
-        return this.value;
-    }
-
-    private void setParent(Node p) {
-        this.parent = p;
-    }
-
-    public Node getParent() {
-        return this.parent;
-    }
-
-    public void addChild(Node ch) {
-        ch.setParent(this);
-        childrenCount++;
-        this.children.add(ch);
-    }
-
-    public Node getChild() {
-        Node child = this.children.get(this.index);
-        index++;
-        return child;
-    }
-
-    public Node removeChild() {
-        Node child = this.children.remove(this.index);
-        childrenCount--;
-        return child;
-    }
-
-    public boolean hasNextChild() {
-        return this.index < this.children.size();
-    }
-
-    public boolean hasMaxChildren() {
-        return maxChildren == childrenCount;
-    }
-
-    public void replaceChild(Node child, Node newChild) {
-        int i = this.children.indexOf(child);
-        this.children.set(i, newChild);
-        newChild.setParent(this);
-    }
-
-    public void setMainLast(){
-        for (Node childNode :
-                children) {
-            if(childNode.getValue().equals("main_func")) {
-                children.remove(childNode);
-                children.add(childNode);
-                return;
-            }
-        }
-    }
-
-    public void setPoint(int val){
-//        lastVarID = val;
-        point = (val + 2) * 4;
-    }
-
-    public void switchAfterElse(){
-        afterElse = !afterElse;
-    }
-
-    public void codeGenerate(StringBuilder code) {
+    private boolean codeGenerate(StringBuilder code) {
         if (value.equals("return")) {
             code.append("\tpop eax ;here is the result\n")
-                    .append("\tmov esp, ebp  ; restore ESP; now it points to old EBP\n")
-                    .append("\tpop ebp       ; restore old EBP; now ESP is where it was before prologue\n")
+                    .append("\tmov esp, ebp\t;restore ESP\n")
+                    .append("\tpop ebp\t;restore old EBP\n")
                     .append("\tret " + curr_param_count + "\n\n");
+        }
+        else if(value.equals("for")){
+            forCycleCount ++;
+        }
+        else if(value.equals("CONTINUE")){
+            if(forCycleCount < 1){
+                System.out.println("Error while generation code! Keyword 'continue' is out of the cycle!");
+                return false;
+            }
+            code.append("jmp _for_start" + forCycleCount + "\t;continue\n");
+        }else if(value.equals("BREAK")){
+            if(forCycleCount < 1){
+                System.out.println("Error while generation code! Keyword 'break' is out of the cycle!");
+                return false;
+            }
+            code.append("jmp _for_end" + forCycleCount + "\t;break\n");
         }
         else if(value.matches("for_start[0-9]")){
             code.append("_" + value + ":\n");
         }
-        else if(value.equals("less")){
-            code.append("\tpop eax; expression\n")
-                    .append("\tpop ebx; value\n")
+        else if(value.matches("[0-9]for_\\{")){
+            forCycleCount --;
+            code.append("\tjmp for_start" + value.charAt(0) + "\n");
+            code.append("_for_end" + value.charAt(0) + ":\n");
+        }
+        else if(value.matches("less[0-9]")){
+            code.append("\tpop eax\t;expression\n")
                     .append("\tcmp ebx, eax\n")
-                    .append("\tjle _for_start" + point + ";if value less than expr\n\n");
+                    .append("\tjle _for_end" + value.charAt(4) + "\t;if value less than expr\n\n");
         }
-        else if(value.equals("more")){
-            code.append("\tpop eax; expression\n")
-                    .append("\tpop ebx; value\n")
+        else if(value.matches("more[0-9]")){
+            code.append("\tpop eax\t;expression\n")
                     .append("\tcmp eax, ebx\n")
-                    .append("\tjle _for_start" + point + ";if value more than expr\n\n");
+                    .append("\tjle _for_end" + value.charAt(4) + "\t;if value more than expr\n\n");
         }
-//        else if(value.equals("plus_one"))
-        else if (value.matches("&&")) {
+        else if(value.equals("minusOne")){
+            code.append("\tsub ebx, 1\n");
+        }
+        else if(value.equals("plusOne")){
+            code.append("\tadd ebx, 1\n");
+        }
+        else if (value.equals("&&")) {
 
             code.append("\tpop ECX\n")
                     .append("\tpop EAX\n")
@@ -848,7 +808,7 @@ class Node {
                     .append("\t\tpush eax\n\n");
 
         }
-        else if (value.matches("\\*")) {
+        else if (value.equals("*")) {
 
             code.append("\tmov edx, 0\n")
                     .append("\tpop ECX\n")
@@ -857,7 +817,7 @@ class Node {
                     .append("\tpush EAX\n\n");
 
         }
-        else if (value.matches("/")) {
+        else if (value.equals("/")) {
 
             code.append("\tpop ECX\n")
                     .append("\tpop EAX\n")
@@ -876,20 +836,29 @@ class Node {
                     .append("\tpush EAX\n\n");
             divCount += 2;
         }
-        else if (value.matches("-")) {
+        else if (value.equals("-")) {
 
             code.append("\tpop EBX\n")
                     .append("\tneg EBX\n")
                     .append("\tpush EBX\n\n");
 
         }
-        else if (value.matches("if")) {
+        else if (value.equals("+")) {
+
+            code.append("\tpop EAX\n")
+                    .append("\tpop EBX\n")
+                    .append("\tadd EAX, EBX\n")
+                    .append("\tpush EAX\n");
+
+        }
+        else if (value.equals("if")) {
             loopCount += 2;
             code.append("pop eax\t;if\n" +
                     "cmp eax, 0\n" +
                     "je _L" + loopCount + "\n\n");
 
-        } else if (value.matches("else")) {
+        }
+        else if (value.equals("else")) {
             code.append("jmp _L" + (loopCount + 1) + "\n" +
                     "_L" + loopCount + ":\n");
 
@@ -909,6 +878,9 @@ class Node {
         else if (value.matches("[a-zA-Z_][a-zA-Z_0-9]*_val")) {
             code.append("\tpush [ebp-").append(point).append("]     ;").append(value).append("\n");
         }
+        else if (value.matches("[a-zA-Z_][a-zA-Z_0-9]*_val_for")) {
+            code.append("\tmov ebx, [ebp-" + point + "]\n");
+        }
         else if(afterElse && value.matches("\\{")) {
             code.append("_L" +  (loopCount +1) + ":\n");
         }
@@ -920,7 +892,7 @@ class Node {
                 Collections.reverse(params);
             }
             code.append(value.substring(0, value.lastIndexOf("_")) + " proc\n")
-            .append("\tpush ebp\n\tmov ebp, esp\n");
+                    .append("\tpush ebp\n\tmov ebp, esp\n");
         }
         else if(value.matches("[a-zA-Z_][a-zA-Z_0-9]*_call")){
             code.append("call " + value.substring(0, value.lastIndexOf("_")) + "\n")
@@ -934,11 +906,83 @@ class Node {
             curr_param_count = this.children.size();
             code.append(";" + value + " \n");
         }
+        return true;
     }
-
+    public void isParam(){
+        isParam = true;
+    }
+    public int getChildrenCount(){
+        return childrenCount;
+    }
+    public String getValue() {
+        return this.value;
+    }
+    private void setParent(Node p) {
+        this.parent = p;
+    }
+    public Node getParent() {
+        return this.parent;
+    }
+    public void addChild(Node ch) {
+        ch.setParent(this);
+        childrenCount++;
+        this.children.add(ch);
+    }
+    public boolean hasMaxChildren() {
+        return maxChildren == childrenCount;
+    }
+    public void replaceChild(Node child, Node newChild) {
+        int i = this.children.indexOf(child);
+        this.children.set(i, newChild);
+        newChild.setParent(this);
+    }
+    public void setMainLast(){
+        for (Node childNode :
+                children) {
+            if(childNode.getValue().equals("main_func")) {
+                children.remove(childNode);
+                children.add(childNode);
+                return;
+            }
+        }
+    }
+    public void switchAfterElse(){
+        afterElse = !afterElse;
+    }
+    public Node removeLastChild() {
+        childrenCount--;
+        return this.children.remove(childrenCount);
+    }
+    public void setPoint(int val){
+//        lastVarID = val;
+        point = (val + 2) * 4;
+    }
     public Node getTailChild(int place) {
         int index = this.children.size() - place;
         return this.children.get(index);
+    }
+
+    public static boolean startGenerate(Node node, StringBuilder code){
+        Node curr = node;
+        boolean done = false;
+        while (!done) {
+            if (curr.hasNextChild()) {
+                curr = curr.getChild();
+            } else {
+                if(!curr.codeGenerate(code)) return false;
+                if (curr == node) done = true;
+                else curr = curr.getParent();
+            }
+        }
+        return true;
+    }
+    private Node getChild() {
+        Node child = this.children.get(this.index);
+        index++;
+        return child;
+    }
+    private boolean hasNextChild() {
+        return this.index < this.children.size();
     }
 }
 
