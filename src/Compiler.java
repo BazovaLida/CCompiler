@@ -28,7 +28,7 @@ class Compiler {
             currNextLine = scanner.nextLine();
 
             matcher = pattern.matcher(currNextLine);
-            System.out.println("\n\tFor '" + currNextLine + "'");
+            System.out.println("\n\n\tFor '" + currNextLine + "'");
             while (matcher.find()) {
                 currNext = currNextLine.substring(matcher.start(), matcher.end());
 
@@ -200,6 +200,7 @@ class Compiler {
 
     private Node parseError(String msg) {
         System.out.println(msg);
+        System.out.println("Current lexem is " + tokens.currVal());
         return null;
     }
 
@@ -277,9 +278,10 @@ class Compiler {
                 // ;
                 // statement
                 currTokenT = tokens.getNextType();
+                TokenT nextTokenT = tokens.getNextType();
+                tokens.indexMinus(1);
                 if(currTokenT.equals(TokenT.IDENTIFIER) && vars.totalContains(tokens.currVal() + "_var") &&
-                    tokens.getNextType().equals(TokenT.LESS_THAN)){
-                    tokens.indexMinus(1);
+                    nextTokenT.equals(TokenT.LESS_THAN)){
                     Node identNode = new Node(tokens.currVal() + "_val_for", 2);
                     identNode.setPoint(vars.getVal( tokens.currVal() + "_var"));
                     forNode.addChild(identNode);
@@ -297,8 +299,7 @@ class Compiler {
                         return parseError("Error while parsing statement after '<' in 'for' loop");
                 }
                 else if(currTokenT.equals(TokenT.IDENTIFIER) && vars.totalContains(tokens.currVal() + "_var") &&
-                        tokens.getNextType().equals(TokenT.MORE_THAN)){
-                    tokens.indexMinus(1);
+                        nextTokenT.equals(TokenT.MORE_THAN)){
                     Node identNode = new Node(tokens.currVal() + "_val_for", 2);
                     identNode.setPoint(vars.getVal( tokens.currVal() + "_var"));
                     forNode.addChild(identNode);
@@ -325,13 +326,14 @@ class Compiler {
                 }
 
                 // post-expression
-                Node childNode = new Node(forPoint + "for_{", 100);
+                Node childNode = new Node(forPoint + "for_{", 2);
                 currNode.addChild(childNode);
-                currNode = childNode;
+                Node forBodyNode = new Node(forPoint + "for_body", 100);
+                childNode.addChild(forBodyNode);
                 currTokenT = tokens.getNextType();
                 if(currTokenT.equals(TokenT.IDENTIFIER)){
-                    Node withPostExpr = parseIdentifier(vars, false, currNode, TokenT.CLOSE_PARENTHESES);
-                    if (withPostExpr == null || !withPostExpr.equals(currNode)) {
+                    Node withPostExpr = parseIdentifier(vars, false, childNode, TokenT.CLOSE_PARENTHESES);
+                    if (withPostExpr == null || !withPostExpr.equals(childNode)) {
                         return parseError("Error while parsing 'for' cycle: unexpected statement in 'post-expression' section");
                     }
                 } else if(!currTokenT.equals(TokenT.CLOSE_PARENTHESES)){
@@ -340,6 +342,7 @@ class Compiler {
                 if(!tokens.getNextType().equals(TokenT.OPEN_BRACE)){
                     return parseError("Parsing error! Expected '{' after 'for(...)'");
                 }
+                currNode = forBodyNode;
             }
             else if(currTokenT.equals(TokenT.KEYWORD_BREAK)) {
                 currNode.addChild(new Node("BREAK", 0));
@@ -394,13 +397,14 @@ class Compiler {
             }
             else if(currTokenT.equals(TokenT.CLOSE_BRACE)){
                 vars = vars.closeBrace();
-                if(!currNode.getValue().equals("{") && !currNode.getValue().matches("[0-9]for_\\{")){
-                    return parseError("Error while parsing '{}'. There are '}', but no '{' before it!");
-                }
                 Node childNode = new Node("}", 0);
                 currNode.addChild(childNode);
-                currNode = currNode.getParent();
-            }
+                if(currNode.getValue().equals("{")){
+                    currNode = currNode.getParent();
+                } else if(currNode.getValue().matches("[0-9]for_body")){
+                    currNode = currNode.getParent().getParent();
+                } else return parseError("Error while parsing '{}'. There are '}', but no '{' before it!");
+            } else return parseError("Parsing error! Unrecognised symbol '" + currTokenT +"'.");
             currTokenT = tokens.getNextType();
         }
 
@@ -685,7 +689,7 @@ class Tokens {
         }
         tokens.add(index, curr);
         types.add(index, getType(curr));
-        System.out.println("   '" + curr + "' is " + types.get(index) + " type");
+        System.out.print("" + types.get(index) + ", ");
         prev = curr;
         return types.get(index) != TokenT.UNKNOWN;
     }
@@ -733,6 +737,7 @@ class Node {
     private static int loopCount = 0;
     private boolean afterElse = false;
     private static int divCount = 0;
+    private static int andCount = 0;
     private boolean isParam = false;
     private static int curr_param_count = 0;
     private static int forCycleCount = 0;
@@ -773,17 +778,17 @@ class Node {
         }
         else if(value.matches("[0-9]for_\\{")){
             forCycleCount --;
-            code.append("\tjmp for_start" + value.charAt(0) + "\n");
+            code.append("\tjmp _for_start" + value.charAt(0) + "\n");
             code.append("_for_end" + value.charAt(0) + ":\n");
         }
         else if(value.matches("less[0-9]")){
             code.append("\tpop eax\t;expression\n")
-                    .append("\tcmp ebx, eax\n")
+                    .append("\tcmp eax, ebx\n")
                     .append("\tjle _for_end" + value.charAt(4) + "\t;if value less than expr\n\n");
         }
         else if(value.matches("more[0-9]")){
             code.append("\tpop eax\t;expression\n")
-                    .append("\tcmp eax, ebx\n")
+                    .append("\tcmp ebx, eax\n")
                     .append("\tjle _for_end" + value.charAt(4) + "\t;if value more than expr\n\n");
         }
         else if(value.equals("minusOne")){
@@ -793,18 +798,18 @@ class Node {
             code.append("\tadd ebx, 1\n");
         }
         else if (value.equals("&&")) {
-
+            andCount ++;
             code.append("\tpop ECX\n")
                     .append("\tpop EAX\n")
                     .append("\tcmp eax, 0   ; check if e1 is true\n")
-                    .append("\tjne _clause2   ; e1 is not 0, so we need to evaluate clause 2\n")
-                    .append("\tjmp _end\n")
-                    .append("\t_clause2:\n")
+                    .append("\tjne _clause" + andCount + "\t;e1 is not 0, evaluate clause 2\n")
+                    .append("\tjmp _end_and" + andCount + "\n")
+                    .append("\t_clause" + andCount + ":\n")
                     .append("\t\tcmp ecx, 0 ; check if e2 is true\n")
                     .append("\t\tmov eax, 0\n")
                     .append("\t\tsetne al\n\n")
 
-                    .append("\t_end:\n")
+                    .append("\t_end_and" + andCount + ":\n")
                     .append("\t\tpush eax\n\n");
 
         }
@@ -871,7 +876,7 @@ class Node {
                 code.append("\tpop " + "[ebp-").append(point).append("];\t" + value +"\n");
             }
             if(isParam){
-                code.append("\tmov eax, [ebp+" + point + "]\n");
+                code.append("\tmov eax, [ebp+" + (point-4) + "]\n");
                 code.append("\tmov [ebp-" + point + "], eax\t;" + value + "\n");
             }
         }
@@ -955,7 +960,7 @@ class Node {
     }
     public void setPoint(int val){
 //        lastVarID = val;
-        point = (val + 2) * 4;
+        point = (val + 3) * 4;
     }
     public Node getTailChild(int place) {
         int index = this.children.size() - place;

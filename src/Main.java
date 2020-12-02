@@ -6,7 +6,7 @@ import java.util.Objects;
 
 public class Main {
     public static void main(String[] args) throws FileNotFoundException {
-        var file = new File("5-1-java-IV-81-Bazova.c");
+        var file = new File("6-1-java-IV-81-Bazova.c");
 
         Compiler compiler = new Compiler(file);
         System.out.println("Program started.");
@@ -21,7 +21,7 @@ public class Main {
                 if (codeASM != null) {
                     System.out.println("Successful generation!");
                     try {
-                        FileWriter myWriter = new FileWriter("5-1-java-IV-81-Bazova.asm");
+                        FileWriter myWriter = new FileWriter("6-1-java-IV-81-Bazova.asm");
                         myWriter.write(codeASM);
                         myWriter.close();
                         System.out.println("Successfully wrote to the file.");
