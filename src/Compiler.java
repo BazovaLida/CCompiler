@@ -28,7 +28,8 @@ class Compiler {
             currNextLine = scanner.nextLine();
 
             matcher = pattern.matcher(currNextLine);
-            System.out.println("\n\n\tFor '" + currNextLine + "'");
+            if(!currNextLine.startsWith("//"))
+                System.out.println("\n\n\tFor '" + currNextLine + "'");
             while (matcher.find()) {
                 currNext = currNextLine.substring(matcher.start(), matcher.end());
 
@@ -76,8 +77,8 @@ class Compiler {
             if (currTokenT.equals(TokenT.KEYWORD_MAIN)) {
 
                 //syntax checking
-                if (tokens.getNextType().equals(TokenT.OPEN_PARENTHESES) &&
-                        tokens.getNextType().equals(TokenT.CLOSE_PARENTHESES)) {//  '()'
+                if (tokens.getNextType().equals(TokenT.OPEN_CAST) &&
+                        tokens.getNextType().equals(TokenT.CLOSE_CAST)) {//  '()'
                     currTokenT = tokens.getNextType();
                     if (currTokenT.equals(TokenT.SEMICOLONS) ) {// ';'
                         prevVars = currVars.skipCurBrace(0);
@@ -110,7 +111,7 @@ class Compiler {
             //not main function
             else if (currTokenT.equals((TokenT.IDENTIFIER))) {
                 name = tokens.currVal();
-                if (tokens.getNextType().equals(TokenT.OPEN_PARENTHESES)) {
+                if (tokens.getNextType().equals(TokenT.OPEN_CAST)) {
                     Node paramNode = new Node(name + "_param", 10);
                     Node withParam = parseFuncParam(paramNode, currVars);
                     if (withParam == null || withParam != paramNode)
@@ -174,7 +175,7 @@ class Compiler {
 
     private Node parseFuncParam(Node node, Variables vars){
         TokenT currTokenT = tokens.getNextType();
-        while (!currTokenT.equals(TokenT.CLOSE_PARENTHESES)){
+        while (!currTokenT.equals(TokenT.CLOSE_CAST)){
             if(!Tokens.typeKeyword.contains(currTokenT)){
                 return parseError("Parsing error: type '" + currTokenT + "' is undefined");
             }
@@ -191,7 +192,7 @@ class Compiler {
             if(currTokenT.equals(TokenT.COMMA)) {
                 currTokenT = tokens.getNextType();
                 continue;
-            }else if(!currTokenT.equals(TokenT.CLOSE_PARENTHESES))
+            }else if(!currTokenT.equals(TokenT.CLOSE_CAST))
                 return parseError("Parsing error: type of '" + currTokenT + "' is undefined");
         }
         return node;
@@ -210,9 +211,9 @@ class Compiler {
         TokenT currTokenT = tokens.getNextType();
         int argumentsCount = 0;
         try {
-            while (!currTokenT.equals(TokenT.CLOSE_PARENTHESES)) {
+            while (!currTokenT.equals(TokenT.CLOSE_CAST)) {
                 argumentsCount ++;
-                Node pargNode = parseStatement(callNode, TokenT.COMMA, vars, currTokenT);
+                Node pargNode = parseStatement(callNode, TokenT.COMMA, vars, currTokenT, false);
                 if (pargNode == null || !pargNode.equals(callNode))
                     return parseError("Error while parsing function argument");
                 currTokenT = tokens.getNextType();
@@ -242,13 +243,13 @@ class Compiler {
                 if (withIdentif == null || !withIdentif.equals(currNode))
                     return null;
             }
-            else if(hasType){
+            else if (hasType) {
                 return parseError("Error while parsing! There is keyword and no variable after that");
             }
-            else if(currTokenT.equals(TokenT.KEYWORD_FOR)){
-                forPoint ++;
+            else if (currTokenT.equals(TokenT.KEYWORD_FOR)) {
+                forPoint++;
                 vars = vars.openBrace();
-                if(!tokens.getNextType().equals(TokenT.OPEN_PARENTHESES))
+                if (!tokens.getNextType().equals(TokenT.OPEN_CAST))
                     return parseError("Parsing error: there is no '(' after 'for'");
 
                 // initial clause
@@ -260,12 +261,11 @@ class Compiler {
                     hasType = true;
                     currTokenT = tokens.getNextType();
                 }
-                if(currTokenT.equals(TokenT.IDENTIFIER)) {
+                if (currTokenT.equals(TokenT.IDENTIFIER)) {
                     Node withIdentif = parseIdentifier(vars, hasType, currNode, TokenT.SEMICOLONS);
                     if (withIdentif == null || !withIdentif.equals(currNode))
                         return parseError("Error while parsing identifier for 'for' loop");
-                }
-                else if(!currTokenT.equals(TokenT.SEMICOLONS))  {
+                } else if (!currTokenT.equals(TokenT.SEMICOLONS)) {
                     return parseError("Parsing error: expected initial clause after 'for(' or nothing before ';'");
                 }
 
@@ -280,47 +280,44 @@ class Compiler {
                 currTokenT = tokens.getNextType();
                 TokenT nextTokenT = tokens.getNextType();
                 tokens.indexMinus(1);
-                if(currTokenT.equals(TokenT.IDENTIFIER) && vars.totalContains(tokens.currVal() + "_var") &&
-                    nextTokenT.equals(TokenT.LESS_THAN)){
+                if (currTokenT.equals(TokenT.IDENTIFIER) && vars.totalContains(tokens.currVal() + "_var") &&
+                        nextTokenT.equals(TokenT.LESS_THAN)) {
                     Node identNode = new Node(tokens.currVal() + "_val_for", 2);
-                    identNode.setPoint(vars.getVal( tokens.currVal() + "_var"));
+                    identNode.setPoint(vars.getVal(tokens.currVal() + "_var"));
                     forNode.addChild(identNode);
                     tokens.getNextType();
                     currTokenT = tokens.getNextType();
-                    if(currTokenT.equals(TokenT.EQUALS)) {
+                    if (currTokenT.equals(TokenT.EQUALS)) {
                         forNode.addChild(new Node("minusOne", 0));
                         currTokenT = tokens.getNextType();
                     }
 
                     Node lessNode = new Node("less" + forPoint, 2); //2 for statement function
                     currNode.addChild(lessNode);
-                    Node withStat = parseStatement(lessNode, TokenT.SEMICOLONS, vars, currTokenT);
+                    Node withStat = parseStatement(lessNode, TokenT.SEMICOLONS, vars, currTokenT, false);
                     if (withStat == null || !withStat.equals(lessNode))
                         return parseError("Error while parsing statement after '<' in 'for' loop");
-                }
-                else if(currTokenT.equals(TokenT.IDENTIFIER) && vars.totalContains(tokens.currVal() + "_var") &&
-                        nextTokenT.equals(TokenT.MORE_THAN)){
+                } else if (currTokenT.equals(TokenT.IDENTIFIER) && vars.totalContains(tokens.currVal() + "_var") &&
+                        nextTokenT.equals(TokenT.MORE_THAN)) {
                     Node identNode = new Node(tokens.currVal() + "_val_for", 2);
-                    identNode.setPoint(vars.getVal( tokens.currVal() + "_var"));
+                    identNode.setPoint(vars.getVal(tokens.currVal() + "_var"));
                     forNode.addChild(identNode);
                     tokens.getNextType();
                     currTokenT = tokens.getNextType();
-                    if(currTokenT.equals(TokenT.EQUALS)) {
+                    if (currTokenT.equals(TokenT.EQUALS)) {
                         forNode.addChild(new Node("plusOne", 0));
                         currTokenT = tokens.getNextType();
                     }
 
                     Node moreNode = new Node("more" + forPoint, 2); //2 for statement function
                     forNode.addChild(moreNode);
-                    Node withStat = parseStatement(moreNode, TokenT.SEMICOLONS, vars, currTokenT);
+                    Node withStat = parseStatement(moreNode, TokenT.SEMICOLONS, vars, currTokenT, false);
                     if (withStat == null || !withStat.equals(moreNode))
                         return parseError("Error while parsing statement after '>' in 'for' loop");
-                }
-                else if(currTokenT.equals(TokenT.SEMICOLONS)) {
+                } else if (currTokenT.equals(TokenT.SEMICOLONS)) {
                     forNode.addChild(new Node("1", 0));
-                }
-                else {
-                    Node statNode = parseStatement(forNode, TokenT.SEMICOLONS, vars, currTokenT);
+                } else {
+                    Node statNode = parseStatement(forNode, TokenT.SEMICOLONS, vars, currTokenT, false);
                     if (statNode == null || !statNode.equals(forNode))
                         return parseError("Parsing error: expected ';' after controlling expression with '>' in 'for' loop");
                 }
@@ -331,47 +328,88 @@ class Compiler {
                 Node forBodyNode = new Node(forPoint + "for_body", 100);
                 childNode.addChild(forBodyNode);
                 currTokenT = tokens.getNextType();
-                if(currTokenT.equals(TokenT.IDENTIFIER)){
-                    Node withPostExpr = parseIdentifier(vars, false, childNode, TokenT.CLOSE_PARENTHESES);
+                if (currTokenT.equals(TokenT.IDENTIFIER)) {
+                    Node withPostExpr = parseIdentifier(vars, false, childNode, TokenT.CLOSE_CAST);
                     if (withPostExpr == null || !withPostExpr.equals(childNode)) {
                         return parseError("Error while parsing 'for' cycle: unexpected statement in 'post-expression' section");
                     }
-                } else if(!currTokenT.equals(TokenT.CLOSE_PARENTHESES)){
+                } else if (!currTokenT.equals(TokenT.CLOSE_CAST)) {
                     return parseError("Parsing error! Unexpected post-expression in 'for' cycle");
                 }
-                if(!tokens.getNextType().equals(TokenT.OPEN_BRACE)){
+                if (!tokens.getNextType().equals(TokenT.OPEN_BRACE)) {
                     return parseError("Parsing error! Expected '{' after 'for(...)'");
                 }
                 currNode = forBodyNode;
             }
-            else if(currTokenT.equals(TokenT.KEYWORD_BREAK)) {
+            else if (currTokenT.equals(TokenT.KEYWORD_BREAK)) {
                 currNode.addChild(new Node("BREAK", 0));
-                if(!tokens.getNextType().equals(TokenT.SEMICOLONS))
+                if (!tokens.getNextType().equals(TokenT.SEMICOLONS))
                     return parseError("Parsing error! Unexpected symbol '" + tokens.currVal() + "' after keyword 'break'");
             }
-            else if(currTokenT.equals(TokenT.KEYWORD_CONTINUE)){
+            else if (currTokenT.equals(TokenT.KEYWORD_CONTINUE)) {
                 currNode.addChild(new Node("CONTINUE", 0));
-                if(!tokens.getNextType().equals(TokenT.SEMICOLONS))
+                if (!tokens.getNextType().equals(TokenT.SEMICOLONS))
                     return parseError("Parsing error! Unexpected symbol '" + tokens.currVal() + "' after keyword 'continue'");
             }
-            else if (currTokenT.equals(TokenT.KEYWORD_IF)){
-                Node childNode = new Node("if", 2);
-                currNode.addChild(childNode);
-                currNode = childNode;
-
-                if(!tokens.getNextType().equals(TokenT.OPEN_PARENTHESES))
+            else if (currTokenT.equals(TokenT.KEYWORD_IF)) {
+                if (!tokens.getNextType().equals(TokenT.OPEN_CAST)) {
                     System.out.println("error: expected '(' after 'if'");
+                }
 
-                Node ifNode = parseStatement(currNode, TokenT.CLOSE_PARENTHESES, vars, tokens.getNextType());
+                Node lastNode = new Node("if", 2);
+                currNode.addChild(lastNode);
 
-                if (ifNode == null || !ifNode.equals(currNode))
+                Node node1 = new Node("if_pop", 2);
+                Node statNode = parseStatement(node1, TokenT.CLOSE_CAST, vars, tokens.getNextType(), true);
+                if (statNode == null || !statNode.equals(node1))
                     return parseError("Error while parsing statement");
-                currNode = currNode.getParent();
+                Node node2 = null, node3;
+                boolean shouldHaveConst = false;
+
+                currTokenT = tokens.getNextType(); //< > = or )
+                if (currTokenT.equals(TokenT.CLOSE_CAST)) {
+                    node2 = new Node("if_with_0", 1);
+                    node3 = new Node("if_neq", 1);
+                }
+                else if (currTokenT.equals(TokenT.LESS_THAN)) {
+                    node3 = new Node("if_less", 1);
+                    shouldHaveConst = true;
+                }
+                else if (currTokenT.equals(TokenT.MORE_THAN)) {
+                    node3 = new Node("if_more", 1);
+                    shouldHaveConst = true;
+                }
+                else if (currTokenT.equals(TokenT.EQUALS)) {
+                    if (!tokens.getNextType().equals(TokenT.EQUALS))
+                        return parseError("Parsing error! There is only one '=' in cast after 'if'!");
+                    node3 = new Node("if_eq", 1);
+                    shouldHaveConst = true;
+                } else return parseError("Parsing error occurs while parsing second statement in cast after 'if'!");
+
+                if(shouldHaveConst){
+                    currTokenT = tokens.getNextType();
+                    String name = tokens.currVal();
+                    int index = vars.getVal( name + "_var");
+
+                    if (currTokenT.equals(TokenT.INT_CONSTANT)){
+                        node2 = new Node("if_with_" + tokens.currVal(), 1);
+                    } else if (index != -1) {
+                        index = (index + 3) * 4;
+                        node2 = new Node("if_with_[ebp-" + index + "]", 1);
+                    }  else return parseError("Parsing error occurs while parsing second statement in cast after 'if'!");
+                }
+
+                node2.addChild(node1);
+                node3.addChild(node2);
+                lastNode.addChild(node3);
+                if(!tokens.getNextType().equals(TokenT.CLOSE_CAST)){
+                    return parseError("Parsing error occurs in cast after 'if'. There is no close cast");
+                }
             }
             else if (currTokenT.equals(TokenT.KEYWORD_ELSE)){
                 try {
                     if (!((currNode.getTailChild(1).getValue().equals("{") &&
-                            currNode.getTailChild(1).getTailChild(1).getValue().equals("}") ||
+                            currNode.getTailChild(1).getTailChild(1).getValue().equals("if_else") ||
                             currNode.getTailChild(1).getValue().matches("[a-zA-Z_][a-zA-Z_0-9]*_var")) &&
                             currNode.getTailChild(2).getValue().equals("if"))) {
                         return parseError("Error! 'else' without a previous 'if' or inappropriate value between it!");
@@ -380,9 +418,7 @@ class Compiler {
                 } catch (IndexOutOfBoundsException e){
                     return parseError("Error! 'else' without a previous 'if' or inappropriate value between it!");
                 }
-
-                Node childNode = new Node("else", 1);
-                currNode.addChild(childNode);
+                currNode.addChild(new Node("else", 0));
             }
             else if(currTokenT.equals(TokenT.OPEN_BRACE)) {
                 vars = vars.openBrace();
@@ -397,8 +433,20 @@ class Compiler {
             }
             else if(currTokenT.equals(TokenT.CLOSE_BRACE)){
                 vars = vars.closeBrace();
-                Node childNode = new Node("}", 0);
+                Node childNode;
+                String prevVal = currNode.getParent().getTailChild(2).getValue();
+                if(prevVal.equals("if")){
+                    currTokenT = tokens.getNextType();
+                    if(currTokenT.equals(TokenT.KEYWORD_ELSE))
+                        childNode = new Node ("if_else", 0);
+                    else
+                        childNode = new Node ("if_end", 0);
+                    tokens.indexMinus(1);
+                } else if(prevVal.equals("else")){
+                    childNode = new Node ("else_end", 0);
+                } else childNode = new Node("}", 0);
                 currNode.addChild(childNode);
+
                 if(currNode.getValue().equals("{")){
                     currNode = currNode.getParent();
                 } else if(currNode.getValue().matches("[0-9]for_body")){
@@ -410,7 +458,7 @@ class Compiler {
 
         Node retNode = new Node("return", 2);
         mainNode.addChild(retNode);
-        Node newRet = parseStatement(retNode, TokenT.SEMICOLONS, vars, tokens.getNextType());
+        Node newRet = parseStatement(retNode, TokenT.SEMICOLONS, vars, tokens.getNextType(), false);
         if (newRet == null || !newRet.equals(retNode)) {
             return parseError("Error while parsing statement after 'return'");
         }
@@ -420,7 +468,7 @@ class Compiler {
     private Node parseIdentifier(Variables vars, boolean hasType, Node currNode, TokenT lastTokenT){
         String name = tokens.currVal();
         TokenT currTokenT = tokens.getNextType();
-        if (currTokenT.equals(TokenT.OPEN_PARENTHESES)) {
+        if (currTokenT.equals(TokenT.OPEN_CAST)) {
             if(hasType)
                 return parseError("Parsing error: there is an identifier before function call!");
 
@@ -449,7 +497,7 @@ class Compiler {
             if (currTokenT.equals(TokenT.SEMICOLONS)) {
                 currNode = currNode.getParent();
             } else if (currTokenT.equals(TokenT.EQUALS)) {
-                Node statNode = parseStatement(currNode, lastTokenT, vars, tokens.getNextType());
+                Node statNode = parseStatement(currNode, lastTokenT, vars, tokens.getNextType(), false);
                 if (statNode == null || !statNode.equals(currNode))
                     return parseError("Error while parsing statement");
 
@@ -469,7 +517,7 @@ class Compiler {
 
                 Node dividerNode = new Node("((", 1);
                 divNode.addChild(dividerNode);
-                Node statNode = parseStatement(dividerNode, TokenT.SEMICOLONS, vars, tokens.getNextType());
+                Node statNode = parseStatement(dividerNode, TokenT.SEMICOLONS, vars, tokens.getNextType(), false);
                 if (statNode == null || !statNode.equals(dividerNode))
                     return parseError("Error while parsing statement");
 
@@ -483,8 +531,8 @@ class Compiler {
         return currNode;
     }
 
-    private Node parseStatement(Node currNode, TokenT stopTokenT, Variables vars, TokenT currTokenT) {
-        EnumSet<TokenT> binaryOp = EnumSet.of(TokenT.DIVISION, TokenT.MULTIPLICATION, TokenT.LOGICAL_AND, TokenT.ADDITION);
+    private Node parseStatement(Node currNode, TokenT stopTokenT, Variables vars, TokenT currTokenT, boolean inIf) {
+        EnumSet<TokenT> binaryOp = EnumSet.of(TokenT.DIVISION, TokenT.MULTIPLICATION, TokenT.LOGICAL_AND, TokenT.ADDITION, TokenT.MODULO);
         Node basic = currNode;
 
         while (!currTokenT.equals(stopTokenT) || currNode.getValue().equals("(")) {
@@ -502,7 +550,7 @@ class Compiler {
                             !currNode.getValue().equals("(")) {
                         currNode = currNode.getTailChild(1);
                     }
-                } else if (currTokenT.equals(TokenT.DIVISION)) {
+                } else if (currTokenT.equals(TokenT.DIVISION) || currTokenT.equals(TokenT.MODULO)) {
                     while ((currNode.getTailChild(1).getValue().equals("&&") || currNode.getTailChild(1).getValue().equals("+"))&&
                             !currNode.getValue().equals("(")) {
                         currNode = currNode.getTailChild(1);
@@ -516,12 +564,12 @@ class Compiler {
                     currNode = binaryNode;
                 } else return parseError("Invalid binary operation syntax");
             }
-            else if (currTokenT.equals(TokenT.OPEN_PARENTHESES)) {
+            else if (currTokenT.equals(TokenT.OPEN_CAST)) {
                 Node childNode = new Node("(", 1);
                 currNode.addChild(childNode);
                 currNode = childNode;
             }
-            else if (currTokenT.equals(TokenT.CLOSE_PARENTHESES)) {
+            else if (currTokenT.equals(TokenT.CLOSE_CAST)) {
                 try {
                     while (!currNode.getValue().equals("(")) {
                         currNode = currNode.getParent();
@@ -538,6 +586,13 @@ class Compiler {
                     parent.replaceChild(currNode, currNode.getTailChild(1));
                     currNode = parent;
                 }
+            }
+            else if(inIf && (currTokenT.equals(TokenT.EQUALS) || currTokenT.equals(TokenT.LESS_THAN) || currTokenT.equals(TokenT.MORE_THAN))){
+                if(!currNode.equals(basic)){
+                    return parseError("Error while parsing statement in 'if' condition! There is open cast  one '=' symbol.");
+                }
+                tokens.indexMinus(1);
+                return currNode;
             }
             else {
                 currNode = parseValue(currNode, currTokenT, vars);
@@ -561,14 +616,13 @@ class Compiler {
         int index = vars.getVal( name + "_var");
         Node childNode;
         if (currToken.equals(TokenT.INT_CONSTANT)) {
-            String val = tokens.currVal();
             if (!(tokens.getNextType().equals(TokenT.DOT) & tokens.getNextType().equals(TokenT.INT_CONSTANT))) {
                 tokens.indexMinus(2);
             }
-            childNode = new Node(val, 0);
+            childNode = new Node(name, 0);
             currNode.addChild(childNode);
         } else if (currToken.equals(TokenT.INT_BIN_CONSTANT)) {
-            String val = tokens.currVal().substring(1);
+            String val = name.substring(1);
             val = Integer.toString(Integer.parseInt(val, 2));
             childNode = new Node(val, 0);
             currNode.addChild(childNode);
@@ -578,7 +632,7 @@ class Compiler {
             childNode = new Node(val, 0);
             childNode.setPoint(index);
             currNode.addChild(childNode);
-        } else if(functions.containsFunc(name) && tokens.getNextType().equals(TokenT.OPEN_PARENTHESES)){
+        } else if(functions.containsFunc(name) && tokens.getNextType().equals(TokenT.OPEN_CAST)){
             Node callNode = callFunction(name, currNode, vars);
             if (callNode == null || !callNode.equals(currNode))
                 return null;
@@ -646,10 +700,10 @@ enum TokenT {
     INT_CONSTANT("[0-9]+"),
     INT_BIN_CONSTANT("b[01]+\\b"),
     IDENTIFIER("[a-zA-Z_][a-zA-Z_0-9]*"),
-    OPEN_PARENTHESES("\\("),
+    OPEN_CAST("\\("),
     DIVIDE_ASSIGN("/="),
     OPEN_BRACE("\\{"),
-    CLOSE_PARENTHESES("\\)"),
+    CLOSE_CAST("\\)"),
     CLOSE_BRACE("}"),
     EQUALS("="),
     MORE_THAN(">"),
@@ -661,6 +715,8 @@ enum TokenT {
     NEGATION("-"),
     MULTIPLICATION("\\*"),
     DIVISION("/"),
+    MODULO("%"),
+    BINARY_NOT("%"),
     HASH("#"),
     DOT("\\."),
     COMMA(","),
@@ -822,6 +878,25 @@ class Node {
                     .append("\tpush EAX\n\n");
 
         }
+        else if (value.equals("%")) {
+
+            code.append("\tpop ECX\n")
+                    .append("\tpop EAX\n")
+                    .append("\tmov EBX, EAX\n")
+                    .append("\tshr EBX, 31\n")
+                    .append("\tcmp EBX, 0\n")
+
+                    .append("\tje _D" + divCount + "\n")
+                    .append("\tmov edx, 0ffffffffh\n")
+                    .append("\tjmp _D" + (divCount + 1) + "\n")
+                    .append("_D" + divCount + ":\n")
+                    .append("\tmov edx, 0\n")
+                    .append("_D" + (divCount + 1) + ":\n")
+
+                    .append("\tidiv ECX\n")
+                    .append("\tpush EDX\n\n");
+            divCount += 2;
+        }
         else if (value.equals("/")) {
 
             code.append("\tpop ECX\n")
@@ -856,17 +931,34 @@ class Node {
                     .append("\tpush EAX\n");
 
         }
-        else if (value.equals("if")) {
+        else if (value.equals("if_pop")) {
             loopCount += 2;
             code.append("pop eax\t;if\n" +
-                    "cmp eax, 0\n" +
-                    "je _L" + loopCount + "\n\n");
-
+                    "cmp eax, ");
         }
-        else if (value.equals("else")) {
-            code.append("jmp _L" + (loopCount + 1) + "\n" +
-                    "_L" + loopCount + ":\n");
-
+        else if (value.matches("if_with_[0-9]+") || value.matches("if_with_\\[ebp-[0-9]+]")) {
+            code.append(value.substring(8) + "\n");
+        }
+        else if (value.equals("if_eq")) {
+            code.append("jne _L" + loopCount + "\n\n");
+        }
+        else if (value.equals("if_less")) {
+            code.append("jge _L" + loopCount + "\n\n");
+        }
+        else if (value.equals("if_more")) {
+            code.append("jle _L" + loopCount + "\n\n");
+        }
+        else if (value.equals("if_neq")) {
+            code.append("je _L" + loopCount + "\n\n");
+        }
+        else if (value.equals("if_else")) {
+            code.append("\tjmp _L" + (loopCount + 1) + "\n_L" + loopCount + ":\n");
+        }
+        else if (value.equals("if_end")) {
+            code.append("_L" + loopCount + ":\n");
+        }
+        else if (value.equals("else_end")) {
+            code.append("_L" + (loopCount + 1) + ":\n");
         }
         else if (value.matches("[0-9]+")) {
             code.append("\tpush ").append(value).append("\n");
@@ -886,9 +978,9 @@ class Node {
         else if (value.matches("[a-zA-Z_][a-zA-Z_0-9]*_val_for")) {
             code.append("\tmov ebx, [ebp-" + point + "]\n");
         }
-        else if(afterElse && value.matches("\\{")) {
-            code.append("_L" +  (loopCount +1) + ":\n");
-        }
+//        else if(afterElse && value.matches("\\{")) {
+//            code.append("_L" +  (loopCount +1) + ":\n");
+//        }
         else if(value.matches("[a-zA-Z_][a-zA-Z_0-9]*_name")){
             if(value.matches("main_name"))
                 curr_param_count = 0;
@@ -959,7 +1051,6 @@ class Node {
         return this.children.remove(childrenCount);
     }
     public void setPoint(int val){
-//        lastVarID = val;
         point = (val + 3) * 4;
     }
     public Node getTailChild(int place) {
